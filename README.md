@@ -2,7 +2,11 @@
 
 Welcome to my game, Bullet Shift.
 
+https://github.com/user-attachments/assets/f4b22e52-e01f-4bc3-96b4-e7ef1d10db20
+
 This a game i made to showcase my opengl and c++ skills.
+
+You can download the playable version here https://motta-arg.itch.io/bullet-shift
 
 It is a first person shooter where you get bullet time with each enemy elimination.
 
