@@ -1,0 +1,25 @@
+# Build directories
+build/
+cmake-build-*/
+_codeql_build_dir/
+_codeql_detected_source_root
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled files
+*.o
+*.a
+*.so
+*.exe
+
+# Blender backups
+*.blend[0-9]*
+
+# External dependencies (keep structure, ignore contents if needed)
+external/glad-repo/
+

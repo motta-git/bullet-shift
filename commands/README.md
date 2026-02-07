@@ -20,7 +20,7 @@ The following libraries are used and automatically managed by the build system:
 Use these scripts if you have a development environment set up on your machine (CMake, Compiler, etc.).
 
 *   Windows: `build-windows.bat` (Requires CMake and Visual Studio/MSVC)
-*   Linux**: `build-linux.sh` (Requires CMake, GCC/Clang, Make)
+*   Linux: `build-linux.sh` (Requires CMake, GCC/Clang, Make)
 *   macOS: `build-macos.sh` (Requires CMake, Clang/Xcode Tools, Make) -> (I haven't been able to test this sh because i don't own a mac so it might not work)
 
 ## Docker / Cross-Compilation

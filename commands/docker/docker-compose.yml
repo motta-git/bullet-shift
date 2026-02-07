@@ -1,0 +1,25 @@
+services:
+  builder: &builder-base
+    build:
+      context: ../..
+      dockerfile: commands/docker/Dockerfile
+    image: opengl-test-builder
+    volumes:
+      - ../..:/app
+    working_dir: /app
+    network_mode: "host"
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+
+  linux:
+    <<: *builder-base
+    environment:
+      - DISPLAY=${DISPLAY}
+    command: /bin/bash commands/build-linux.sh
+
+  macos:
+    <<: *builder-base
+    command: /bin/bash commands/docker/internal/entrypoint-macos.sh
+
+  windows:
+    <<: *builder-base
+    command: /bin/bash commands/docker/internal/entrypoint-windows.sh

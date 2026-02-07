@@ -1,0 +1,6 @@
+build/
+.git/
+.vscode/
+*.user
+imgui.ini
+**/_deps/
