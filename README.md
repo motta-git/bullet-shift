@@ -41,6 +41,30 @@ The following libraries are used (automatically managed):
 - **ESC**: Open menu
 - **SHIFT**: Dash
 
+### How to create more levels.
+
+Inside assets/levels you can find blender files containing the actual level, open it and once you are done modiying or creating a new level simply export to glb.
+
+You have to create entities by placing objects in the scene and naming them according to the following rules:
+
+- **Enemy**: The name must contain `SPAWN_ENEMY`. You can specify the weapon by adding a suffix:
+    - `SPAWN_ENEMY_RIFLE`
+    - `SPAWN_ENEMY_PUMP_SHOTGUN`
+    - `SPAWN_ENEMY_AUTO_SHOTGUN`
+    - `SPAWN_ENEMY_PISTOL`
+    - If no suffix is provided (just `SPAWN_ENEMY`), the enemy will have a random weapon.
+- **Player Spawn**: Must contain `SPAWN_PLAYER`. This marks the starting position.
+- **WeaponPickup**: Must contain `PICKUP_` followed by the weapon type:
+    - `PICKUP_RIFLE`
+    - `PICKUP_PISTOL`
+    - `PICKUP_SHOTGUN` (Auto Shotgun)
+    - `PICKUP_PUMP_SHOTGUN`
+- **Platform**: Any object with a mesh geometry is automatically treated as a platform (collidable floor/wall). The name does not strictly matter, but using `floor`, `wall`, or `platform` is recommended for organization.
+
+## Skyboxes
+
+I developed a system that allows to load .hdr files as skyboxes, you can find these assets at assets/skyboxes.
+
 ## Credits
 
 Agustín Fabio Motta, Programming, Music and almost everything.
