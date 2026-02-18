@@ -16,6 +16,7 @@ struct GLFWwindow;
 #include "InputState.h"
 #include "Enemy.h"
 #include "WeaponPickup.h"
+#include "HealthPickup.h"
 #include "Shader.h"
 #include "AudioSystem.h"
 #include "GuiSystem.h"
@@ -111,6 +112,7 @@ private:
     std::vector<Platform> platforms;
     std::vector<Enemy> enemies;
     std::vector<WeaponPickup> weaponPickups;
+    std::vector<HealthPickup> healthPickups;
     std::vector<Projectile> projectiles;
 
     InputState input;

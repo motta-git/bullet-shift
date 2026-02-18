@@ -76,10 +76,10 @@ Agustín Fabio Motta, Programming, Music and almost everything.
 Low poly pistol made by TastyTony 
 https://sketchfab.com/3d-models/low-poly-g17-60efc54ac59e47d18bdff94b2f5144ff
 
-I used it Under Attribution 4.0 International CC BY 4.0 Deed
-https://creativecommons.org/licenses/by/4.0/
-
 https://pixabay.com/es/sound-effects/single-gunshot-62-hp-37188/
 
 Universal UI/Menu Soundpack by Nathan Gibson
 https://cyrex-studios.itch.io/universal-ui-soundpack
+
+Health Pickup made by BreeseD
+https://sketchfab.com/3d-models/health-pickup-26efde2eb97848a29876697aabb14b87

@@ -55,6 +55,12 @@ void Player::takeDamage(float damage, glm::vec3 /*sourcePosition*/) {
     }
 }
 
+void Player::heal(float amount) {
+    if (amount <= 0.0f) return;
+    health += amount;
+    if (health > maxHealth) health = maxHealth;
+}
+
 void Player::reset() {
     health = maxHealth;
     velocity = glm::vec3(0.0f);

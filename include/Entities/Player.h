@@ -18,6 +18,9 @@ public:
     void reset();
     float getHealth() const { return health; }
     float getMaxHealth() const { return maxHealth; }
+
+    // Healing (clamps to maxHealth)
+    void heal(float amount);
     
     // Inventory management
     Inventory& getInventory() { return inventory; }

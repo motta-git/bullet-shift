@@ -303,7 +303,7 @@ void Game::loadResources() {
 
     // Load common sounds and music
     if (audioSystem) {
-        const std::string pickupSoundId = "assets/sounds/sfx/pickup.ogg";
+        const std::string pickupSoundId = Config::Audio::PICKUP_SOUND;
         std::string pickupSource = pickupSoundId;
         if (!std::filesystem::exists(pickupSource)) {
             const std::string fallbackPickup = "assets/sounds/sfx/pistol-fire.ogg";
@@ -383,14 +383,29 @@ void Game::loadResources() {
         // If the weapon has a pump sound or extra Fx we might load them here in future (placeholder)
     }
 
-    
+    // Load health pickup model if present (user-provided model in assets/models/pickups)
+    const std::string healthModelPath = Config::Pickup::HEALTH_MODEL_PATH;
+    if (!healthModelPath.empty() && std::filesystem::exists(healthModelPath)) {
+        std::cout << "Loading pickup model: " << healthModelPath << std::endl;
+        auto hpMeshes = ModelLoader::loadModel(healthModelPath);
+        if (!hpMeshes.empty()) {
+            // Use first mesh as the visual for health pickups
+            resourceManager->addMesh("health_pickup", std::move(hpMeshes[0]));
+        } else {
+            std::cerr << "Warning: failed to load health pickup model: " << healthModelPath << std::endl;
+        }
+    }
+
     particleSystem = std::make_unique<ParticleSystem>(Config::MAX_PARTICLES);
     // Enable atmospheric particles (ambient dust/motes) around the camera
     particleSystem->enableAtmospheric(true);
-    particleSystem->setAtmosphereRate(8);   // particles per second
-    particleSystem->setAtmosphereRadius(25.0f); // spawn radius around camera
+    particleSystem->setAtmosphereRate(Config::Particle::ATMOSPHERE_RATE);   // particles per second
+    particleSystem->setAtmosphereRadius(Config::Particle::ATMOSPHERE_RADIUS); // spawn radius around camera
 
     debugRenderer = std::make_unique<DebugRenderer>();
+
+    // Reserve likely projectile capacity to avoid runtime reallocations during combat
+    projectiles.reserve(Config::Performance::PROJECTILE_RESERVE);
 
     syncMusicWithState(true);
 
@@ -758,12 +773,43 @@ void Game::update(float deltaTime) {
                         
                         // Robust sound playback
                         if (audioSystem) {
-                             audioSystem->playSound("assets/sounds/sfx/pickup.ogg");
+                             audioSystem->playSound(Config::Audio::PICKUP_SOUND);
                         }
                         break;
                     }
                 }
             }
+        }
+
+        // Auto-collect health pickups on touch (no interaction key required)
+        // Micro-optimizations: cache subsystem pointers and do a cheap broad-phase DSQ test
+        AudioSystem* audio = audioSystem.get();
+        ParticleSystem* particles = particleSystem.get();
+        HUD* localHud = hud.get();
+
+        const float pickupBroadphaseRadius = Config::Pickup::BROADPHASE_RADIUS; // tweakable early-reject radius
+        const float pickupBroadphaseRadiusSq = pickupBroadphaseRadius * pickupBroadphaseRadius;
+        const glm::vec3 playerPos = player.getPosition();
+
+        for (auto& hp : healthPickups) {
+            if (hp.isPickedUp()) continue;
+
+            // If player already at max health, don't consume the pickup (only allow when < max)
+            if (player.getHealth() >= player.getMaxHealth()) continue;
+
+            // Broad-phase: squared-distance check before invoking pickup() / canPickup
+            glm::vec3 d = hp.getPosition() - playerPos;
+            if (glm::dot(d, d) > pickupBroadphaseRadiusSq) continue;
+
+            // Narrow-phase: perform pickup (HealthPickup still guards against repeat pickups)
+            float healed = hp.pickup();
+            if (healed <= 0.0f) continue;
+
+            player.heal(healed);
+
+            if (localHud) localHud->flashHealthBar(Config::Pickup::HEALTH_FLASH_DURATION);
+            if (audio) audio->playSound(Config::Audio::PICKUP_SOUND);
+            if (particles) particles->emitExplosion(playerPos, Config::Effects::HEALTH_PICKUP_PARTICLES);
         }
 
         // Update Enemies
@@ -826,14 +872,14 @@ void Game::update(float deltaTime) {
 
         if (explosionTimer > 4.0f && platforms.size() > 2) {
             if (particleSystem) {
-                particleSystem->emitExplosion(platforms[2].getPosition() + glm::vec3(0.0f, 1.5f, 0.0f), 60);
+                particleSystem->emitExplosion(platforms[2].getPosition() + glm::vec3(0.0f, 1.5f, 0.0f), Config::Effects::EXPLOSION_PARTICLE_COUNT);
             }
             explosionTimer = 0.0f;
         }
 
         if (fireTimer > 0.1f && platforms.size() > 4) {
             if (particleSystem) {
-                particleSystem->emitFire(platforms[4].getPosition() + glm::vec3(0.0f, 1.0f, 0.0f), 8);
+                particleSystem->emitFire(platforms[4].getPosition() + glm::vec3(0.0f, 1.0f, 0.0f), Config::Effects::FIRE_PARTICLE_COUNT);
             }
             fireTimer = 0.0f;
         }
@@ -888,7 +934,7 @@ void Game::triggerBulletTime() {
         m_bulletTimeActive = true;
         // Play sound if available
         if (audioSystem) {
-             audioSystem->playSound("assets/sounds/sfx/pickup.ogg"); 
+             audioSystem->playSound(Config::Audio::PICKUP_SOUND); 
         }
     }
 }
@@ -1223,6 +1269,54 @@ void Game::renderScene(const glm::mat4& projection, const glm::mat4& view) {
             glm::mat4 model = glm::translate(glm::mat4(1.0f), pickupPos);
             model = glm::rotate(model, m_accumulatedTime, glm::vec3(0.0f, 1.0f, 0.0f));
             model = glm::scale(model, glm::vec3(0.3f, 0.5f, 0.2f));
+            lightingShader->setMat4("model", model);
+            cubeMesh->draw();
+        }
+    }
+
+    // Health Pickups (auto-collect) — prefer user-provided model `health_pickup`, fallback to procedural sphere/cube
+    Mesh* healthMesh = resourceManager->getMesh("health_pickup");
+    Mesh* sphereMesh = resourceManager->getMesh("sphere");
+    for (const auto& hp : healthPickups) {
+        if (hp.isPickedUp()) continue;
+
+        glm::vec3 pickupPos = hp.getPosition();
+        pickupPos.y += 0.15f + 0.08f * std::sin(m_accumulatedTime * 2.0f);
+
+        if (healthMesh) {
+            lightingShader->setVec3("material.ambient", 0.5f, 0.6f, 0.5f);
+            lightingShader->setVec3("material.diffuse", 0.8f, 0.9f, 0.8f);
+            lightingShader->setVec3("material.specular", 1.0f, 1.0f, 1.0f);
+            lightingShader->setFloat("material.shininess", 96.0f);
+
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), pickupPos);
+            model = glm::rotate(model, m_accumulatedTime, glm::vec3(0.0f, 1.0f, 0.0f));
+            // Use configured scale for health pickup models
+            model = glm::scale(model, glm::vec3(Config::Pickup::HEALTH_SCALE));
+
+            lightingShader->setMat4("model", model);
+            healthMesh->draw();
+        } else if (sphereMesh) {
+            lightingShader->setVec3("material.ambient", 0.2f, 0.6f, 0.2f);
+            lightingShader->setVec3("material.diffuse", 0.3f, 0.9f, 0.3f);
+            lightingShader->setVec3("material.specular", 0.6f, 0.8f, 0.6f);
+            lightingShader->setFloat("material.shininess", 64.0f);
+
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), pickupPos);
+            model = glm::rotate(model, m_accumulatedTime, glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.28f));
+
+            lightingShader->setMat4("model", model);
+            sphereMesh->draw();
+        } else if (cubeMesh) {
+            lightingShader->setVec3("material.ambient", 0.2f, 0.6f, 0.2f);
+            lightingShader->setVec3("material.diffuse", 0.3f, 0.9f, 0.3f);
+            lightingShader->setVec3("material.specular", 0.6f, 0.8f, 0.6f);
+            lightingShader->setFloat("material.shininess", 64.0f);
+
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), pickupPos);
+            model = glm::rotate(model, m_accumulatedTime, glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.25f, 0.25f, 0.25f));
             lightingShader->setMat4("model", model);
             cubeMesh->draw();
         }

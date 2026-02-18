@@ -75,8 +75,8 @@ void HUD::onDamageTaken(glm::vec3 playerPos, glm::vec3 playerFront, glm::vec3 so
     
     DamageIndicator indicator;
     indicator.angle = snappedAngle;
-    indicator.lifetime = 2.0f; // 2 seconds
-    indicator.maxLifetime = 2.0f;
+    indicator.lifetime = Config::UI::DAMAGE_INDICATOR_LIFETIME; // seconds
+    indicator.maxLifetime = Config::UI::DAMAGE_INDICATOR_LIFETIME;
     
     m_damageIndicators.push_back(indicator);
 }
@@ -90,6 +90,21 @@ void HUD::update(float deltaTime) {
             ++it;
         }
     }
+
+    // Update health-bar flash timer
+    if (m_healthFlashActive) {
+        m_healthFlashTimer -= deltaTime;
+        if (m_healthFlashTimer <= 0.0f) {
+            m_healthFlashActive = false;
+            m_healthFlashTimer = 0.0f;
+        }
+    }
+}
+
+void HUD::flashHealthBar(float duration) {
+    m_healthFlashDuration = duration;
+    m_healthFlashTimer = duration;
+    m_healthFlashActive = true;
 }
 
 void HUD::render(int health, int maxHealth, const std::string& weaponName, 
@@ -170,9 +185,18 @@ void HUD::render(int health, int maxHealth, const std::string& weaponName,
     // Bar Background
     drawList->AddRectFilled(ImVec2(healthX, healthY), ImVec2(healthX + barWidth, healthY + barHeight), 
                          ImColor(20, 20, 20, 150));
-    // Bar Fill
+    // Bar Fill (red normally, flash green briefly when health was picked up)
+    ImColor healthFillColor;
+    if (m_healthFlashActive) {
+        float t = glm::clamp(m_healthFlashTimer / m_healthFlashDuration, 0.0f, 1.0f);
+        // Fade the green flash out over the duration
+        int alpha = (int)(230.0f * t);
+        healthFillColor = ImColor(80, 220, 80, alpha);
+    } else {
+        healthFillColor = ImColor(220, 40, 40, 230);
+    }
     drawList->AddRectFilled(ImVec2(healthX, healthY), ImVec2(healthX + barWidth * healthPercent, healthY + barHeight), 
-                         ImColor(220, 40, 40, 230));
+                         healthFillColor);
     // Border
     drawList->AddRect(ImVec2(healthX, healthY), ImVec2(healthX + barWidth, healthY + barHeight), 
                     ImColor(255, 255, 255, 100), 0.0f, 0, 1.5f);
@@ -268,18 +292,18 @@ void HUD::renderNotificationPopup() {
     ImVec2 textSize = ImGui::CalcTextSize(m_currentNotification.text.c_str());
     
     // Box dimensions (GTA-style: compact black box)
-    float padding = 15.0f * scale;
+float padding = Config::UI::NOTIFICATION_PADDING * scale;
     float boxWidth = textSize.x + padding * 2.0f;
     float boxHeight = textSize.y + padding * 2.0f;
-    
+
     // Position at top left
-    float boxX = 20.0f * scale;
-    float boxY = 20.0f * scale;
+    float boxX = Config::UI::NOTIFICATION_BOX_X * scale;
+    float boxY = Config::UI::NOTIFICATION_BOX_Y * scale;
     
     // Fade in/out effect
     float alpha = 1.0f;
-    float fadeInTime = 0.3f;
-    float fadeOutTime = 0.5f;
+    float fadeInTime = Config::UI::NOTIFICATION_FADE_IN;
+    float fadeOutTime = Config::UI::NOTIFICATION_FADE_OUT;
     
     if (m_currentNotification.currentTime < fadeInTime) {
         // Fade in

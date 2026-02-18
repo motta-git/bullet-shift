@@ -74,6 +74,7 @@ bool LevelManager::loadLevel(int levelIndex) {
 
     if (m_game.projectiles.size() > 0) m_game.projectiles.clear();
     if (m_game.weaponPickups.size() > 0) m_game.weaponPickups.clear();
+    if (m_game.healthPickups.size() > 0) m_game.healthPickups.clear();
     m_pendingSpawns.clear();
 
     std::cout << "LevelManager: Processing level " << m_currentLevelPath << "..." << std::endl;
@@ -131,20 +132,20 @@ bool LevelManager::loadLevel(int levelIndex) {
                                getKeyNameStr(keys.moveRight) + ": Move | Mouse: Look | Left Click: Shoot | " +
                                getKeyNameStr(keys.reload) + ": Reload | " +
                                getKeyNameStr(keys.jump) + ": Jump";
-        m_game.showNotification(tutorial, 8.0f);
+        m_game.showNotification(tutorial, Config::UI::NOTIFICATION_TUTORIAL);
     } else if (levelIndex == 2) {
         // Tutorial for level 2
-        m_game.showNotification("Level 2: The Battle Begins", 4.0f);
-        m_game.showNotification("Enemies will chase and attack you", 4.0f);
-        m_game.showNotification("Look for weapon pickups around the map", 5.0f);
-        m_game.showNotification("Stay alert and keep moving!", 4.0f);
+        m_game.showNotification("Level 1: The Battle Begins", Config::UI::NOTIFICATION_SHORT);
+        m_game.showNotification("Enemies will chase and attack you", Config::UI::NOTIFICATION_SHORT);
+        m_game.showNotification("Look for weapon pickups around the map", Config::UI::NOTIFICATION_MEDIUM);
+        m_game.showNotification("Stay alert and keep moving!", Config::UI::NOTIFICATION_SHORT);
     } else if (levelIndex == 3) {
         const auto& keys = Settings::getInstance().keybinds;
-        m_game.showNotification("Level 3", 4.0f);
-        m_game.showNotification("You can dash by pressing " + getKeyNameStr(keys.dash), 4.0f);
+        m_game.showNotification("Level 2", Config::UI::NOTIFICATION_SHORT);
+        m_game.showNotification("You can dash by pressing " + getKeyNameStr(keys.dash), Config::UI::NOTIFICATION_SHORT);
     } else {
         // Generic notification for other levels
-        m_game.showNotification("Level " + std::to_string(levelIndex) + " - Good luck!", 4.0f);
+        m_game.showNotification("Level " + std::to_string(levelIndex) + " - Good luck!", Config::UI::NOTIFICATION_SHORT);
     }
 
     return true;
@@ -180,6 +181,7 @@ void LevelManager::loadHardcodedFallback() {
     m_game.projectiles.clear();
 
     m_game.weaponPickups.clear();
+    m_game.healthPickups.clear();
     m_game.weaponPickups.emplace_back(glm::vec3(3.0f, 0.5f, 3.0f), WeaponType::RIFLE); 
     m_game.weaponPickups.emplace_back(glm::vec3(-5.0f, 0.5f, -5.0f), WeaponType::PISTOL);
     m_game.weaponPickups.emplace_back(glm::vec3(0.0f, 0.5f, -2.0f), WeaponType::AUTO_SHOTGUN);
@@ -368,6 +370,10 @@ void LevelManager::resolveSpawns() {
         }
         else if (name.find("PICKUP_PUMP_SHOTGUN") != std::string::npos) {
             m_game.weaponPickups.emplace_back(glm::vec3(spawn.position.x, resolvedY + 0.2f, spawn.position.z), WeaponType::PUMP_SHOTGUN);
+        }
+        else if (name.find("PICKUP_HEALTH") != std::string::npos) {
+            // Auto-collect health pickup
+            m_game.healthPickups.emplace_back(glm::vec3(spawn.position.x, resolvedY + 0.2f, spawn.position.z), Config::Pickup::HEALTH_AMOUNT);
         }
     }
 }

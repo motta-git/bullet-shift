@@ -36,6 +36,9 @@
     - [] make player hands
     - [ ] Firing should illuminate the area.
 
+- [] Programming
+    - [] Create tests
+
 # Finished Tasks
 
 - [x] Add Weapon Models with simple gun animations
