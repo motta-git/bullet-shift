@@ -47,6 +47,16 @@ public:
 
     void update(float deltaTime);
 
+    // --- Test helpers / safe accessors ---------------------------------
+    // Small read-only accessors used by unit tests to verify HUD state.
+    bool isHealthFlashActive() const { return m_healthFlashActive; }
+    float getHealthFlashTimer() const { return m_healthFlashTimer; }
+    float getHealthFlashDuration() const { return m_healthFlashDuration; }
+
+    size_t queuedNotificationCount() const { return m_notificationQueue.size(); }
+    bool currentNotificationActive() const { return m_currentNotification.active; }
+    std::string currentNotificationText() const { return m_currentNotification.text; }
+
 private:
     void renderNotificationPopup();
     void renderDamageIndicators(ImDrawList* drawList, float screenWidth, float screenHeight, float scale);

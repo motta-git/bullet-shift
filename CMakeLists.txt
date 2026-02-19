@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.14) # Required for FetchContent
 project(bullet_shift)
 
+# Enable CTest at the top level so tests added in subdirectories are discoverable
+enable_testing()
+
 # Set OpenGL policy to prefer GLVND
 cmake_policy(SET CMP0072 NEW)
 
@@ -267,3 +270,31 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -DDEST_DIR=$<TARGET_FILE_DIR:${PROJECT_NAME}> -P "${COPY_ASSETS_SCRIPT}"
     COMMENT "Copying assets and shaders to output directory..."
 )
+
+# Unit tests (Google Test)
+# Optionally enable/disable building the test suite (useful for CI/dev toggles)
+option(BUILD_TESTS "Build unit tests" ON)
+# If ON, tests will be executed automatically every time the main game target is built
+option(RUN_TESTS_ON_BUILD "Run unit tests automatically after building the game" ON)
+
+if(BUILD_TESTS)
+    add_subdirectory(tests)
+
+    if(RUN_TESTS_ON_BUILD)
+        # Run unit tests before building the game executable.
+        # If any test fails, the command returns non‑zero and the build stops
+        # immediately — the game binary will NOT be produced.
+        add_custom_target(run_unit_tests ALL
+            COMMAND $<TARGET_FILE:unit_tests> --gtest_color=yes --gtest_output=xml:${CMAKE_BINARY_DIR}/Testing/unit_tests.xml
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "Running unit tests build will stop on failure"
+            VERBATIM
+        )
+
+        # Ensure the test binary is built before the runner target runs
+        add_dependencies(run_unit_tests unit_tests)
+
+        # Run tests as part of building the main executable
+        add_dependencies(${PROJECT_NAME} run_unit_tests)
+    endif()
+endif()
