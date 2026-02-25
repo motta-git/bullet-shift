@@ -34,10 +34,10 @@
     - [x] atmospheric particles
     - [x] shader driven post-processing (Bloom, color grading, screen-space fog)
     - [] make player hands
-    - [ ] Firing should illuminate the area.
+    - [x] Firing should illuminate the area.
 
 - [] Programming
-    - [] Create tests
+    - [x] Create tests
 
 # Finished Tasks
 

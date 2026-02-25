@@ -28,6 +28,11 @@ public:
     // Enemy shooting
     bool shouldShoot(float currentTime) const;
     void shoot(float currentTime);
+    void triggerMuzzleFlash(glm::vec3 pos);
+    
+    // Muzzle flash accessors
+    float getMuzzleFlashTimer() const { return m_muzzleFlashTimer; }
+    glm::vec3 getMuzzleFlashPos() const { return m_muzzleFlashPos; }
     
     // Take damage
     void takeDamage(float damage);
@@ -77,6 +82,10 @@ private:
     bool alerted;
     float alertedTimer;
     float alertedDuration; // seconds
+
+    // Muzzle flash light state
+    float m_muzzleFlashTimer;
+    glm::vec3 m_muzzleFlashPos;
 
     
     // Pathfinding

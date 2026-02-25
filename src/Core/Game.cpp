@@ -50,8 +50,11 @@ Game::Game()
       m_bulletTimeActive(false),
       m_bulletTimeEnergy(100.0f),
       m_accumulatedTime(0.0f),
+      m_playerMuzzleFlashTimer(0.0f),
+      m_playerMuzzleFlashColor(1.0f, 0.8f, 0.3f),
       state(GameState::MAIN_MENU),
-      currentLevel(0) {
+      currentLevel(0),
+      m_showDebugLevelSelector(false) {
     auto& settings = Settings::getInstance();
     // Load settings first (try to load file, if not, it uses defaults)
     settings.load();
@@ -595,6 +598,24 @@ void Game::processInput() {
         input.jumpTriggered = input.fireHeld = input.reloadTriggered = input.switchTriggered = input.pickupTriggered = input.bulletTimeTriggered = false;
     }
 
+    // Debug Menu Toggle
+    const bool debugHeldNow = (glfwGetKey(window, GLFW_KEY_GRAVE_ACCENT) == GLFW_PRESS) || 
+                              (glfwGetKey(window, GLFW_KEY_BACKSLASH) == GLFW_PRESS) ||
+                              (glfwGetKey(window, GLFW_KEY_WORLD_1) == GLFW_PRESS) ||
+                              (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS);
+    input.debugTriggered = debugHeldNow && !input.debugHeld;
+    input.debugHeld = debugHeldNow;
+
+    if (input.debugTriggered) {
+        m_showDebugLevelSelector = !m_showDebugLevelSelector;
+        if (m_showDebugLevelSelector) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        } else if (state == GameState::PLAYING) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            input.firstMouse = true;
+        }
+    }
+
     if (input.escTriggered) {
         if (menuSystem && menuSystem->isSettingsOpen()) {
             menuSystem->closeSettings();
@@ -620,6 +641,11 @@ void Game::processInput() {
 
 void Game::update(float deltaTime) {
     syncMusicWithState();
+
+    if (m_playerMuzzleFlashTimer > 0.0f) {
+        m_playerMuzzleFlashTimer -= deltaTime;
+    }
+
     if (state == GameState::PLAYING) {
         if (!player.isAlive()) {
             state = GameState::GAME_OVER;
@@ -707,6 +733,11 @@ void Game::update(float deltaTime) {
                 if (particleSystem) {
                     particleSystem->emitMuzzleFlash(muzzlePos, camera.Front, 12);
                 }
+                
+                // Muzzle Flash Light
+                m_playerMuzzleFlashTimer = 0.05f;
+                m_playerMuzzleFlashPos = muzzlePos;
+                // You could vary color by weapon type here if desired
                 
                 // Recoil
                 auto data = Config::Weapon::getWeaponConfig(currentWeapon->getType());
@@ -849,6 +880,8 @@ void Game::update(float deltaTime) {
                         // Spawn Enemy Projectile (isEnemy=true)
                         projectiles.emplace_back(muzzlePos, currentSpreadDir, speed, damage, lifetime, true);
                     }
+
+                    enemy.triggerMuzzleFlash(muzzlePos); // Trigger muzzle flash light effect
 
                     // Play enemy fire sound from weapon config
                     auto config = Config::Weapon::getWeaponConfig(enemyWeapon->getType());
@@ -1155,6 +1188,59 @@ void Game::renderScene(const glm::mat4& projection, const glm::mat4& view) {
         lightingShader->setFloat(prefix + "quadratic", 0.032f);
     }
 
+    // Player Muzzle Flash Light (Index 4)
+    if (m_playerMuzzleFlashTimer > 0.0f) {
+        std::string prefix = "pointLights[4].";
+        lightingShader->setVec3(prefix + "position", m_playerMuzzleFlashPos);
+        lightingShader->setVec3(prefix + "ambient", m_playerMuzzleFlashColor * 0.2f);
+        lightingShader->setVec3(prefix + "diffuse", m_playerMuzzleFlashColor * 2.0f); // Brightness boost
+        lightingShader->setVec3(prefix + "specular", m_playerMuzzleFlashColor);
+        lightingShader->setFloat(prefix + "constant", 1.0f);
+        lightingShader->setFloat(prefix + "linear", 0.14f);
+        lightingShader->setFloat(prefix + "quadratic", 0.07f);
+    } else {
+        // Disable by setting color to black
+        std::string prefix = "pointLights[4].";
+        lightingShader->setVec3(prefix + "diffuse", 0.0f, 0.0f, 0.0f);
+        lightingShader->setVec3(prefix + "ambient", 0.0f, 0.0f, 0.0f);
+        lightingShader->setVec3(prefix + "specular", 0.0f, 0.0f, 0.0f);
+        lightingShader->setFloat(prefix + "constant", 1.0f); // Prevent NaN
+        lightingShader->setFloat(prefix + "linear", 0.14f);
+        lightingShader->setFloat(prefix + "quadratic", 0.07f);
+    }
+
+    // Enemy Muzzle Flash Lights (Indices 5-7)
+    int lightIndex = 5;
+    for (const auto& enemy : enemies) {
+        if (enemy.isAlive() && enemy.getMuzzleFlashTimer() > 0.0f) {
+            std::string prefix = "pointLights[" + std::to_string(lightIndex) + "].";
+            glm::vec3 flashPos = enemy.getMuzzleFlashPos();
+            glm::vec3 flashColor = glm::vec3(1.0f, 0.7f, 0.3f); // Warm muzzle flash color
+            
+            lightingShader->setVec3(prefix + "position", flashPos);
+            lightingShader->setVec3(prefix + "ambient", flashColor * 0.2f);
+            lightingShader->setVec3(prefix + "diffuse", flashColor * 2.0f);
+            lightingShader->setVec3(prefix + "specular", flashColor);
+            lightingShader->setFloat(prefix + "constant", 1.0f);
+            lightingShader->setFloat(prefix + "linear", 0.14f);
+            lightingShader->setFloat(prefix + "quadratic", 0.07f);
+            
+            lightIndex++;
+            if (lightIndex > 7) break; // We only have 3 slots for enemies
+        }
+    }
+
+    // Disable remaining slots to prevent NaN
+    for (int i = lightIndex; i < 8; i++) {
+        std::string prefix = "pointLights[" + std::to_string(i) + "].";
+        lightingShader->setVec3(prefix + "diffuse", 0.0f, 0.0f, 0.0f);
+        lightingShader->setVec3(prefix + "ambient", 0.0f, 0.0f, 0.0f);
+        lightingShader->setVec3(prefix + "specular", 0.0f, 0.0f, 0.0f);
+        lightingShader->setFloat(prefix + "constant", 1.0f);
+        lightingShader->setFloat(prefix + "linear", 0.09f);
+        lightingShader->setFloat(prefix + "quadratic", 0.032f);
+    }
+
     // Spot Light (Flashlight)
     lightingShader->setVec3("spotLight.position", camera.Position);
     lightingShader->setVec3("spotLight.direction", camera.Front);
@@ -1408,8 +1494,80 @@ void Game::renderHUD() {
 }
 
 void Game::renderGUI() {
+    if (guiSystem) {
+        guiSystem->beginFrame();
+    }
+
     if (menuSystem) {
         menuSystem->render(state, currentLevel);
+    }
+
+    if (m_showDebugLevelSelector) {
+        ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Debug Level Selector", &m_showDebugLevelSelector)) {
+            ImGui::Text("Select Level:");
+            ImGui::Separator();
+
+            // Use std::filesystem to find all level_*.glb files in assets/levels
+            std::vector<int> detectedLevels;
+            try {
+                for (const auto& entry : std::filesystem::directory_iterator("assets/levels")) {
+                    if (entry.path().extension() == ".glb") {
+                        std::string filename = entry.path().stem().string();
+                        // Check if it starts with "level_"
+                        if (filename.substr(0, 6) == "level_") {
+                            try {
+                                int levelNum = std::stoi(filename.substr(6));
+                                detectedLevels.push_back(levelNum);
+                            } catch (...) {
+                                // Ignore files that don't have a number after "level_"
+                            }
+                        }
+                    }
+                }
+            } catch (const std::filesystem::filesystem_error& e) {
+                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Failed to read assets/levels dir");
+            }
+
+            // Fallback to Config::Levels if directory scan returned nothing
+            if (detectedLevels.empty()) {
+                for (int i = 1; i <= (int)Config::Levels::LEVEL_CONFIGS.size(); ++i) {
+                    detectedLevels.push_back(i);
+                }
+            } else {
+                std::sort(detectedLevels.begin(), detectedLevels.end());
+            }
+
+            for (int levelIndex : detectedLevels) {
+                std::string label;
+                if (levelIndex <= (int)Config::Levels::LEVEL_CONFIGS.size()) {
+                    const auto& config = Config::Levels::getLevelConfig(levelIndex);
+                    label = "Level " + std::to_string(levelIndex) + ": " + config.name;
+                } else {
+                    label = "Level " + std::to_string(levelIndex) + ": Custom/Auto-detected";
+                }
+
+                if (ImGui::Button(label.c_str(), ImVec2(-1, 0))) {
+                    loadLevel(levelIndex);
+                    m_showDebugLevelSelector = false;
+                }
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Close", ImVec2(-1, 0))) {
+                m_showDebugLevelSelector = false;
+                if (state == GameState::PLAYING) {
+                    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                    input.firstMouse = true;
+                }
+            }
+        }
+        ImGui::End();
+    }
+
+    if (guiSystem) {
+        guiSystem->endFrame();
+        guiSystem->render();
     }
 }
 

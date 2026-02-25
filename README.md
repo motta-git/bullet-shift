@@ -18,6 +18,13 @@ There is a TODO.md file with a list of features i would like to continue working
 
 Enjoy!
 
+## Branches
+
+- **main**: The main branch.
+- **develop**: The development branch.
+
+We push changes into develop and once it is stable and has a good amount of progress we merge it to main.
+
 ## Dependencies
 
 This project is configured to build using Docker and Docker Compose to ensure a consistent environment across different operating systems.

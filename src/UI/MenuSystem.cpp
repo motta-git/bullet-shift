@@ -16,7 +16,6 @@ MenuSystem::MenuSystem(GuiSystem& gui, AudioSystem& audio, Callbacks callbacks)
 MenuSystem::~MenuSystem() {}
 
 void MenuSystem::render(GameState state, int currentLevel) {
-    m_gui.beginFrame();
 
     switch (state) {
         case GameState::PLAYING:
@@ -72,9 +71,6 @@ void MenuSystem::render(GameState state, int currentLevel) {
     if (m_showSettings) {
         renderSettingsMenu(&m_showSettings);
     } 
-
-    m_gui.endFrame();
-    m_gui.render();
 }
 
 void MenuSystem::renderMainMenu() {

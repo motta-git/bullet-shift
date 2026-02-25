@@ -30,6 +30,7 @@ void ModelLoader::processNode(aiNode* node, const aiScene* scene, std::vector<st
 }
 
 std::unique_ptr<Mesh> ModelLoader::processMesh(aiMesh* mesh, const aiScene* scene) {
+    (void)scene;
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
 

@@ -14,7 +14,7 @@ services:
     <<: *builder-base
     environment:
       - DISPLAY=${DISPLAY}
-    command: /bin/bash commands/build-linux.sh
+    command: /bin/bash commands/build.sh --platform linux
 
   macos:
     <<: *builder-base

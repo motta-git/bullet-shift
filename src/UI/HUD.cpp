@@ -110,6 +110,10 @@ void HUD::flashHealthBar(float duration) {
 void HUD::render(int health, int maxHealth, const std::string& weaponName, 
                 int currentAmmo, int reserveAmmo, bool reloading, int enemyCount, const std::string& interactionPrompt,
                 float bulletTimeEnergy, float maxBulletTimeEnergy, bool bulletTimeActive) {
+    (void)reloading;
+    (void)bulletTimeEnergy;
+    (void)maxBulletTimeEnergy;
+    (void)bulletTimeActive;
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     
@@ -281,6 +285,7 @@ void HUD::renderNotificationPopup() {
     ImFont* regularFont = io.Fonts->Fonts[0];
     
     float screenWidth = io.DisplaySize.x;
+    (void)screenWidth;
     float screenHeight = io.DisplaySize.y;
     float referenceHeight = Config::UI_REFERENCE_HEIGHT;
     float scale = screenHeight / referenceHeight;

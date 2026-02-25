@@ -47,7 +47,7 @@ struct SpotLight {
     vec3 specular;
 };
 
-#define NR_POINT_LIGHTS 4
+#define NR_POINT_LIGHTS 8
 
 uniform vec3 viewPos;
 uniform Material material;

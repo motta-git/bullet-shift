@@ -135,7 +135,14 @@ private:
     float m_bulletTimeEnergy;
     float m_accumulatedTime;
 
+    // Muzzle Flash
+    float m_playerMuzzleFlashTimer;
+    glm::vec3 m_playerMuzzleFlashPos;
+    glm::vec3 m_playerMuzzleFlashColor;
+
     GameState state;
     int currentLevel;
     std::string activeMusicTrackId;
+
+    bool m_showDebugLevelSelector;
 };
