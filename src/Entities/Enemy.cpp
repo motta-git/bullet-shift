@@ -16,16 +16,16 @@ Enemy::Enemy(glm::vec3 position, WeaponType weaponType)
       maxHealth(100.0f),
       detectionRange(30.0f),
       m_weaponDropped(false),
+      m_wasAlive(true),
       velocity(0.0f),
       acceleration(0.0f),
       onGround(false),
       moveSpeed(6.0f),
       hasSeenPlayer(false),
       timeSinceLastSaw(0.0f),
-      lastSeenPosition(position),
-      alerted(false),
-      alertedTimer(0.0f),
-      alertedDuration(3.0f),
+      lastSeenPosition(0.0f),
+      alerted(false), alertedTimer(0.0f), alertedDuration(1.5f),
+      m_muzzleFlashTimer(0.0f), m_muzzleFlashPos(0.0f),
       currentWaypointIndex(0),
       pathRecalculateTimer(0.0f),
       pathRecalculateInterval(0.5f) {
@@ -73,7 +73,7 @@ void Enemy::update(float deltaTime, glm::vec3 playerPosition,
         // Start alerted state the first frame we lose sight (if we had seen the player)
         if (!alerted && hasSeenPlayer) {
             alerted = true;
-            alertedTimer = 0.0f;
+            alertedTimer = alertedDuration; // Set to full duration when alerted
             // Play an alert sound if audio system available
             if (audio) {
                 audio->playSound("enemy_alert");
@@ -87,13 +87,18 @@ void Enemy::update(float deltaTime, glm::vec3 playerPosition,
     }
 
     // Advance alerted timer (visual fades over alertedDuration)
-    if (alerted) {
-        alertedTimer += deltaTime;
-        if (alertedTimer > alertedDuration) {
-            // Let progress fade to zero but keep alerted true for logic until we reach last seen
-            alertedTimer = alertedDuration;
-        }
+    if (alertedTimer > 0.0f) {
+        alertedTimer -= deltaTime;
+        if (alertedTimer < 0.0f) alertedTimer = 0.0f;
     }
+
+    if (m_muzzleFlashTimer > 0.0f) {
+        m_muzzleFlashTimer -= deltaTime;
+        if (m_muzzleFlashTimer < 0.0f) m_muzzleFlashTimer = 0.0f;
+    }
+
+    // AI state updates
+    if (health <= 0.0f) return;
     
     // Update weapon state and handle auto-reload if empty
     if (weapon) {
@@ -108,9 +113,12 @@ void Enemy::update(float deltaTime, glm::vec3 playerPosition,
     
     // Apply physics (gravity, collision)
     applyPhysics(deltaTime, platforms);
+
+    m_wasAlive = isAlive();
 } 
 
 bool Enemy::shouldShoot(float currentTime) const {
+    (void)currentTime;
     if (!isAlive() || !hasSeenPlayer || !weapon) {
         return false;
     }
@@ -131,6 +139,11 @@ bool Enemy::shouldShoot(float currentTime) const {
 
 void Enemy::shoot(float /*currentTime*/) {
     // Logic handled by weapon->fire() in Game.cpp or here.
+}
+
+void Enemy::triggerMuzzleFlash(glm::vec3 pos) {
+    m_muzzleFlashTimer = 0.05f; // Same duration as player's
+    m_muzzleFlashPos = pos;
 }
 
 void Enemy::takeDamage(float damage) {

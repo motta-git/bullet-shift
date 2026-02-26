@@ -151,6 +151,8 @@ std::vector<int> NavigationGraph::getNeighbors(int nodeIndex) const {
 }
 
 std::vector<glm::vec3> NavigationGraph::reconstructPath(const std::vector<int>& cameFrom, int current) const {
+    (void)cameFrom;
+    (void)current;
     std::vector<glm::vec3> path;
     // This helper is not currently used but kept for potential future use
     return path;

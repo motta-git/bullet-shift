@@ -23,3 +23,4 @@ _codeql_detected_source_root
 # External dependencies (keep structure, ignore contents if needed)
 external/glad-repo/
 
+.cache

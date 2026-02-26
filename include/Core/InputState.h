@@ -27,6 +27,9 @@ struct InputState {
     bool dashHeld = false;
     bool dashTriggered = false;
 
+    bool debugHeld = false;
+    bool debugTriggered = false;
+
     bool firstMouse = true;
     float lastMouseX = 0.0f;
     float lastMouseY = 0.0f;

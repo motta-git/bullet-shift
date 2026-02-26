@@ -17,13 +17,18 @@ Platform::Platform(glm::vec3 position, glm::vec3 size, const Mesh* mesh, const g
     }
     
     // Detect if this platform is intended to be ground/floor
-    // This helps decide whether to skip AABB side-collisions (invisible walls)
+    // A surface is a floor if it has a floor-like name OR if it's horizontally large and vertically thin.
     std::string upperName = name;
     std::transform(upperName.begin(), upperName.end(), upperName.begin(), ::toupper);
-    m_isFloor = (upperName.find("FLOOR") != std::string::npos || 
-                 upperName.find("GROUND") != std::string::npos || 
-                 upperName.find("RAMP") != std::string::npos ||
-                 size.x > 10.0f || size.z > 10.0f); // Robust fallback for huge surfaces
+    
+    bool hasFloorName = (upperName.find("FLOOR") != std::string::npos || 
+                         upperName.find("GROUND") != std::string::npos || 
+                         upperName.find("RAMP") != std::string::npos);
+    
+    // A surface is considered "flat" if its height is the smallest dimension and it's relatively thin
+    bool isFlat = (size.y < size.x && size.y < size.z) || (size.y < 1.0f && (size.x > 5.0f || size.z > 5.0f));
+    
+    m_isFloor = hasFloorName || isFlat;
 }
 
 float Platform::getSurfaceHeight(glm::vec3 xzPos, float currentY) const {
@@ -119,8 +124,13 @@ bool Platform::checkCollision(glm::vec3& playerPos, glm::vec3 playerSize, glm::v
             }
 
             // If we are significantly BELOW the mesh surface, treat it as a solid obstacle (e.g. Columns)
-            // unless we've explicitly marked it as a floor-only model.
-            if (!m_isFloor && playerBottom < exactHeight - STEP_HEIGHT) {
+            // Even if marked as a floor, if it's thick enough, we should allow AABB to block us.
+            if (playerBottom < exactHeight - STEP_HEIGHT) {
+                // If it's a floor, we might want to skip side-collisions to avoid getting stuck on "invisible" walls of thin planes
+                // but if the AABB overlap is significant and it's not JUST a thin floor, we should block.
+                if (m_isFloor && size.y < 0.5f) {
+                    return false;
+                }
                 // Fall through to AABB resolution below
             } else {
                 return false; 
@@ -134,7 +144,7 @@ bool Platform::checkCollision(glm::vec3& playerPos, glm::vec3 playerSize, glm::v
                 float playerBottom = playerPos.y - playerSize.y / 2.0f;
                 float aabbTop = position.y + size.y / 2.0f;
                 const float STEP_HEIGHT = 0.5f;
-                const float PENETRATION_THRESHOLD = 1.0f;
+                const float PENETRATION_THRESHOLD = 0.5f;
                 if (playerBottom <= aabbTop + STEP_HEIGHT && playerBottom >= aabbTop - PENETRATION_THRESHOLD) {
                     if (playerVelocity.y <= 0.1f) {
                         playerPos.y = aabbTop + playerSize.y / 2.0f;

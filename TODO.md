@@ -12,6 +12,7 @@
     - [ ] Health packs, Ammo crates, and Power-ups.
     - [ ] Breaking crates or explosive barrels.
     - [ ] Snipers, Melee Rushers
+    - [x] Enemies drop their weapons upon getting game ended
 
 - [] Levels.
     - [x] Level 1
@@ -34,7 +35,10 @@
     - [x] atmospheric particles
     - [x] shader driven post-processing (Bloom, color grading, screen-space fog)
     - [] make player hands
-    - [ ] Firing should illuminate the area.
+    - [x] Firing should illuminate the area.
+
+- [] Programming
+    - [x] Create tests
 
 # Finished Tasks
 

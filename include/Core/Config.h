@@ -16,6 +16,12 @@ namespace Config {
     
     // Particle system
     constexpr int MAX_PARTICLES = 2000;
+
+    namespace Particle {
+        // Atmospheric particle spawn (ambient dust/motes)
+        constexpr int ATMOSPHERE_RATE = 8;            // particles/sec around camera
+        constexpr float ATMOSPHERE_RADIUS = 25.0f;    // spawn radius around camera
+    }
     
     // Player dimensions (realistic human proportions)
     constexpr float PLAYER_WIDTH = 0.6f;
@@ -61,7 +67,25 @@ namespace Config {
     
     // UI Settings
     constexpr float UI_REFERENCE_HEIGHT = 720.0f; // Lower value = Bigger UI
-    constexpr const char* FONT_PATH = "assets/ui/Airlock.otf";
+    constexpr const char* FONT_PATH = "assets/ui/NimbusSans.otf";
+
+    // HUD / Notification tuning
+    namespace UI {
+        constexpr float NOTIFICATION_DEFAULT = 5.0f;
+        constexpr float NOTIFICATION_FADE_IN = 0.3f;
+        constexpr float NOTIFICATION_FADE_OUT = 0.5f;
+        constexpr float NOTIFICATION_TUTORIAL = 8.0f;
+        constexpr float NOTIFICATION_SHORT = 4.0f;
+        constexpr float NOTIFICATION_MEDIUM = 5.0f;
+
+        // Notification popup layout
+        constexpr float NOTIFICATION_PADDING = 15.0f;
+        constexpr float NOTIFICATION_BOX_X = 20.0f;
+        constexpr float NOTIFICATION_BOX_Y = 20.0f;
+
+        // Damage indicator lifetime (seconds)
+        constexpr float DAMAGE_INDICATOR_LIFETIME = 2.0f;
+    }
 
     namespace Audio {
         struct MusicTrackConfig {
@@ -90,6 +114,8 @@ namespace Config {
                 : MAIN_MENU_TRACK;
         }
 
+        // Common UI / SFX
+        inline constexpr const char* PICKUP_SOUND = "assets/sounds/sfx/pickup.ogg";
         inline constexpr const char* FOOTSTEP_SOUND_1 = "assets/sounds/sfx/footstep_1.ogg";
         inline constexpr const char* FOOTSTEP_SOUND_2 = "assets/sounds/sfx/footstep_2.ogg";
         inline constexpr const char* UI_CLICK_SOUND = "assets/sounds/ui/Minimalist13.ogg";
@@ -224,6 +250,31 @@ namespace Config {
             }
         }
     }
+
+    // Pickup configuration (models & presentation)
+    namespace Pickup {
+        // Path to the health pickup model (optional). Leave empty to use procedural sphere fallback.
+        inline constexpr const char* HEALTH_MODEL_PATH = "assets/models/pickups/health_pickup.glb";
+
+        // Default visual scale applied to the health pickup model at render time
+        constexpr float HEALTH_SCALE = 0.01f;
+        // Amount of health restored by a single health pickup
+        constexpr float HEALTH_AMOUNT = 25.0f;
+        // Tuning for proximity / UI
+        constexpr float BROADPHASE_RADIUS = 1.25f;            // early-reject radius for proximity checks (squared used in code)
+        constexpr float HEALTH_FLASH_DURATION = 0.5f;        // HUD flash time when picking health
+    }
+
+    // Small performance / allocation hints
+    namespace Performance {
+        constexpr size_t PROJECTILE_RESERVE = 256; // reserve size for projectiles vector
+    }
+
+    // Effect-related counts moved to config for easy tuning
+    namespace Effects {
+        constexpr int HEALTH_PICKUP_PARTICLES = 8;
+        constexpr int EXPLOSION_PARTICLE_COUNT = 60;
+        constexpr int FIRE_PARTICLE_COUNT = 8;    }
 
     // Level Configurations
     namespace Levels {

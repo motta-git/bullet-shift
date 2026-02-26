@@ -49,10 +49,17 @@ void Player::update(float deltaTime) {
 }
 
 void Player::takeDamage(float damage, glm::vec3 /*sourcePosition*/) {
+    if (m_godMode) return; // God mode - invincible
     health -= damage;
     if (health < 0.0f) {
         health = 0.0f;
     }
+}
+
+void Player::heal(float amount) {
+    if (amount <= 0.0f) return;
+    health += amount;
+    if (health > maxHealth) health = maxHealth;
 }
 
 void Player::reset() {

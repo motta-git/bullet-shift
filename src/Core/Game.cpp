@@ -22,10 +22,12 @@
 #include "ResourceManager.h"
 #include "PhysicsSystem.h"
 #include "Settings.h"
+#include "GameRenderer.h"
+#include "DevConsole.h"
 #include <imgui.h>
 
 namespace {
-const char* title = "Dodger";
+const char* title = "Bullet Shift";
 }
 
 Game* Game::instance = nullptr;
@@ -50,6 +52,8 @@ Game::Game()
       m_bulletTimeActive(false),
       m_bulletTimeEnergy(100.0f),
       m_accumulatedTime(0.0f),
+      m_playerMuzzleFlashTimer(0.0f),
+      m_playerMuzzleFlashColor(1.0f, 0.8f, 0.3f),
       state(GameState::MAIN_MENU),
       currentLevel(0) {
     auto& settings = Settings::getInstance();
@@ -60,9 +64,21 @@ Game::Game()
     
     input.lastMouseX = settings.window.width / 2.0f;
     input.lastMouseY = settings.window.height / 2.0f;
+
+    if (!instance) {
+        instance = this;
+    }
+
+    m_gameRenderer = std::make_unique<GameRenderer>(*this);
+    m_console = std::make_unique<DevConsole>();
 }
 
 Game::~Game() {
+    // Destroy Renderer first, it might depend on other systems
+    m_gameRenderer.reset();
+    m_console.reset();
+    
+    // Explicitly reset all unique_ptrs before glfwTerminate
     debugRenderer.reset();
     hud.reset();
     levelManager.reset();
@@ -76,6 +92,9 @@ Game::~Game() {
     audioSystem.reset();
     particleSystem.reset();
     physicsSystem.reset();
+    shadowSystem.reset();
+    skybox.reset();
+    navigationGraph.reset();
 
     if (window) {
         glfwDestroyWindow(window);
@@ -86,8 +105,8 @@ Game::~Game() {
 }
 
 bool Game::initialize() {
-    if (instance) {
-        std::cerr << "Game instance already exists" << std::endl;
+    if (instance && instance != this) {
+        std::cerr << "Another Game instance already exists" << std::endl;
         return false;
     }
 
@@ -219,7 +238,9 @@ bool Game::initialize() {
         ImGui::SetNextWindowSize(io.DisplaySize);
         ImGui::Begin("HUDOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBringToFrontOnFocus);
         
-        this->renderHUD();
+        if (this->m_gameRenderer) {
+            this->m_gameRenderer->renderHUD(this->state, this->player, this->hud, this->enemies, this->interactionPrompt, this->m_bulletTimeEnergy, this->m_bulletTimeActive);
+        }
 
         ImGui::End();
 
@@ -303,7 +324,7 @@ void Game::loadResources() {
 
     // Load common sounds and music
     if (audioSystem) {
-        const std::string pickupSoundId = "assets/sounds/sfx/pickup.ogg";
+        const std::string pickupSoundId = Config::Audio::PICKUP_SOUND;
         std::string pickupSource = pickupSoundId;
         if (!std::filesystem::exists(pickupSource)) {
             const std::string fallbackPickup = "assets/sounds/sfx/pistol-fire.ogg";
@@ -383,14 +404,29 @@ void Game::loadResources() {
         // If the weapon has a pump sound or extra Fx we might load them here in future (placeholder)
     }
 
-    
+    // Load health pickup model if present (user-provided model in assets/models/pickups)
+    const std::string healthModelPath = Config::Pickup::HEALTH_MODEL_PATH;
+    if (!healthModelPath.empty() && std::filesystem::exists(healthModelPath)) {
+        std::cout << "Loading pickup model: " << healthModelPath << std::endl;
+        auto hpMeshes = ModelLoader::loadModel(healthModelPath);
+        if (!hpMeshes.empty()) {
+            // Use first mesh as the visual for health pickups
+            resourceManager->addMesh("health_pickup", std::move(hpMeshes[0]));
+        } else {
+            std::cerr << "Warning: failed to load health pickup model: " << healthModelPath << std::endl;
+        }
+    }
+
     particleSystem = std::make_unique<ParticleSystem>(Config::MAX_PARTICLES);
     // Enable atmospheric particles (ambient dust/motes) around the camera
     particleSystem->enableAtmospheric(true);
-    particleSystem->setAtmosphereRate(8);   // particles per second
-    particleSystem->setAtmosphereRadius(25.0f); // spawn radius around camera
+    particleSystem->setAtmosphereRate(Config::Particle::ATMOSPHERE_RATE);   // particles per second
+    particleSystem->setAtmosphereRadius(Config::Particle::ATMOSPHERE_RADIUS); // spawn radius around camera
 
     debugRenderer = std::make_unique<DebugRenderer>();
+
+    // Reserve likely projectile capacity to avoid runtime reallocations during combat
+    projectiles.reserve(Config::Performance::PROJECTILE_RESERVE);
 
     syncMusicWithState(true);
 
@@ -580,6 +616,27 @@ void Game::processInput() {
         input.jumpTriggered = input.fireHeld = input.reloadTriggered = input.switchTriggered = input.pickupTriggered = input.bulletTimeTriggered = false;
     }
 
+    // Console Toggle
+    const bool debugHeldNow = (glfwGetKey(window, Settings::getInstance().keybinds.consoleToggle) == GLFW_PRESS) || 
+                              (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS);
+    input.debugTriggered = debugHeldNow && !input.debugHeld;
+    input.debugHeld = debugHeldNow;
+
+    if (input.debugTriggered && m_console) {
+        bool wasOpen = m_console->isOpen();
+        m_console->toggle();
+        if (m_console->isOpen() && state == GameState::PLAYING) {
+            state = GameState::PAUSED;
+        }
+        // Sync cursor
+        if (m_console->isOpen()) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        } else if (wasOpen && state == GameState::PLAYING) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            input.firstMouse = true;
+        }
+    }
+
     if (input.escTriggered) {
         if (menuSystem && menuSystem->isSettingsOpen()) {
             menuSystem->closeSettings();
@@ -605,6 +662,11 @@ void Game::processInput() {
 
 void Game::update(float deltaTime) {
     syncMusicWithState();
+
+    if (m_playerMuzzleFlashTimer > 0.0f) {
+        m_playerMuzzleFlashTimer -= deltaTime;
+    }
+
     if (state == GameState::PLAYING) {
         if (!player.isAlive()) {
             state = GameState::GAME_OVER;
@@ -693,6 +755,11 @@ void Game::update(float deltaTime) {
                     particleSystem->emitMuzzleFlash(muzzlePos, camera.Front, 12);
                 }
                 
+                // Muzzle Flash Light
+                m_playerMuzzleFlashTimer = 0.05f;
+                m_playerMuzzleFlashPos = muzzlePos;
+                // You could vary color by weapon type here if desired
+                
                 // Recoil
                 auto data = Config::Weapon::getWeaponConfig(currentWeapon->getType());
                 weaponRenderer.triggerRecoil(data.recoilRotation);
@@ -758,7 +825,7 @@ void Game::update(float deltaTime) {
                         
                         // Robust sound playback
                         if (audioSystem) {
-                             audioSystem->playSound("assets/sounds/sfx/pickup.ogg");
+                             audioSystem->playSound(Config::Audio::PICKUP_SOUND);
                         }
                         break;
                     }
@@ -766,15 +833,55 @@ void Game::update(float deltaTime) {
             }
         }
 
+        // Auto-collect health pickups on touch (no interaction key required)
+        // Micro-optimizations: cache subsystem pointers and do a cheap broad-phase DSQ test
+        AudioSystem* audio = audioSystem.get();
+        ParticleSystem* particles = particleSystem.get();
+        HUD* localHud = hud.get();
+
+        const float pickupBroadphaseRadius = Config::Pickup::BROADPHASE_RADIUS; // tweakable early-reject radius
+        const float pickupBroadphaseRadiusSq = pickupBroadphaseRadius * pickupBroadphaseRadius;
+        const glm::vec3 playerPos = player.getPosition();
+
+        for (auto& hp : healthPickups) {
+            if (hp.isPickedUp()) continue;
+
+            // If player already at max health, don't consume the pickup (only allow when < max)
+            if (player.getHealth() >= player.getMaxHealth()) continue;
+
+            // Broad-phase: squared-distance check before invoking pickup() / canPickup
+            glm::vec3 d = hp.getPosition() - playerPos;
+            if (glm::dot(d, d) > pickupBroadphaseRadiusSq) continue;
+
+            // Narrow-phase: perform pickup (HealthPickup still guards against repeat pickups)
+            float healed = hp.pickup();
+            if (healed <= 0.0f) continue;
+
+            player.heal(healed);
+
+            if (localHud) localHud->flashHealthBar(Config::Pickup::HEALTH_FLASH_DURATION);
+            if (audio) audio->playSound(Config::Audio::PICKUP_SOUND);
+            if (particles) particles->emitExplosion(playerPos, Config::Effects::HEALTH_PICKUP_PARTICLES);
+        }
+
         // Update Enemies
         bool anyEnemyAlive = false;
         for (auto& enemy : enemies) {
+            if (enemy.justDied()) {
+                if (!enemy.isWeaponDropped() && enemy.getWeapon()) {
+                    weaponPickups.emplace_back(enemy.getPosition(), enemy.getWeapon()->getType());
+                    enemy.setWeaponDropped(true);
+                    if (particleSystem) {
+                        particleSystem->emitExplosion(enemy.getPosition(), 10);
+                    }
+                }
+            }
+
             if (!enemy.isAlive()) {
                 continue;
             }
             anyEnemyAlive = true;
 
-            // Pass audioSystem to allow enemy to play alert SFX when it loses sight
             enemy.update(worldDeltaTime, player.getPosition(), navigationGraph.get(), platforms, audioSystem.get());
 
             if (enemy.shouldShoot(m_accumulatedTime)) {
@@ -804,6 +911,8 @@ void Game::update(float deltaTime) {
                         projectiles.emplace_back(muzzlePos, currentSpreadDir, speed, damage, lifetime, true);
                     }
 
+                    enemy.triggerMuzzleFlash(muzzlePos); // Trigger muzzle flash light effect
+
                     // Play enemy fire sound from weapon config
                     auto config = Config::Weapon::getWeaponConfig(enemyWeapon->getType());
                     if (audioSystem && strlen(config.fireSoundPath) > 0) {
@@ -826,14 +935,14 @@ void Game::update(float deltaTime) {
 
         if (explosionTimer > 4.0f && platforms.size() > 2) {
             if (particleSystem) {
-                particleSystem->emitExplosion(platforms[2].getPosition() + glm::vec3(0.0f, 1.5f, 0.0f), 60);
+                particleSystem->emitExplosion(platforms[2].getPosition() + glm::vec3(0.0f, 1.5f, 0.0f), Config::Effects::EXPLOSION_PARTICLE_COUNT);
             }
             explosionTimer = 0.0f;
         }
 
         if (fireTimer > 0.1f && platforms.size() > 4) {
             if (particleSystem) {
-                particleSystem->emitFire(platforms[4].getPosition() + glm::vec3(0.0f, 1.0f, 0.0f), 8);
+                particleSystem->emitFire(platforms[4].getPosition() + glm::vec3(0.0f, 1.0f, 0.0f), Config::Effects::FIRE_PARTICLE_COUNT);
             }
             fireTimer = 0.0f;
         }
@@ -867,7 +976,7 @@ void Game::update(float deltaTime) {
     }
 
     if (static_cast<int>(glfwGetTime() * 2) % 2 == 0) {
-        glfwSetWindowTitle(window, "Dodger");
+        glfwSetWindowTitle(window, "Bullet Shift");
     }
 }
 
@@ -888,7 +997,7 @@ void Game::triggerBulletTime() {
         m_bulletTimeActive = true;
         // Play sound if available
         if (audioSystem) {
-             audioSystem->playSound("assets/sounds/sfx/pickup.ogg"); 
+             audioSystem->playSound(Config::Audio::PICKUP_SOUND); 
         }
     }
 }
@@ -938,384 +1047,39 @@ void Game::applySettings() {
 }
 
 void Game::render() {
-    // Use manual gamma correction in post-processing if possible, 
-    // but for now we follow the existing toggle logic.
-    // When rendering to HDR FBO, we should work in linear space.
-    if (Settings::getInstance().graphics.gammaCorrection && !postProcessing) {
-        glEnable(GL_FRAMEBUFFER_SRGB);
-    } else {
-        glDisable(GL_FRAMEBUFFER_SRGB);
-    }
-
-    // --- Shadow Pass ---
-    if (shadowSystem) {
-        Shader* depthShader = resourceManager->getShader("shadowDepth");
-        if (depthShader) {
-            glm::vec3 lightDir(-0.3f, -1.0f, -0.2f); // Same as dirLight in renderScene
-            shadowSystem->updateLightSpaceMatrix(lightDir, player.getPosition());
-            
-            depthShader->use();
-            depthShader->setMat4("lightSpaceMatrix", shadowSystem->getLightSpaceMatrix());
-            
-            shadowSystem->bindForWriting();
-            renderDepthScene(*depthShader);
-            shadowSystem->unbind();
-            
-            // Restore viewport after shadow pass
-            glViewport(0, 0, Settings::getInstance().window.width, Settings::getInstance().window.height);
-        }
-    }
-
-    if (postProcessing) {
-        postProcessing->begin();
-    } else {
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    }
-
-    glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom),
-                                            static_cast<float>(Settings::getInstance().window.width) / Settings::getInstance().window.height,
-                                            Config::NEAR_PLANE,
-                                            Config::FAR_PLANE);
-    glm::mat4 view = camera.getViewMatrix();
-
-    renderScene(projection, view);
-    
-    // Render Skybox (using GL_LEQUAL depth test)
-    if (skybox) {
-        Shader* skyShader = resourceManager->getShader("skybox");
-        if (skyShader) {
-            skybox->render(projection, view, *skyShader);
-        }
-    }
-
-    // Render Weapon Hand Model (after skybox so it's always on top)
-    Shader* lightingShader = resourceManager->getShader("lighting");
-    if (lightingShader) {
-        lightingShader->use();
-        weaponRenderer.render(camera, *lightingShader, player.getInventory().getCurrentWeapon(), *resourceManager, m_accumulatedTime);
-    }
-
-    renderLights(projection, view);
-    renderProjectiles(projection, view);
-
-    Shader* particleShader = resourceManager->getShader("particle");
-    if (particleShader && particleSystem) {
-        particleSystem->draw(projection, view, *particleShader);
-    }
-
-    if (debugRenderer) {
-        debugRenderer->render(projection, view);
-        
-        // Debug visualization for navigation graph
-        if (navigationGraph && navigationGraph->isValid() && state == GameState::PLAYING) {
-            const auto& nodes = navigationGraph->getNodes();
-            const auto& edges = navigationGraph->getEdges();
-            
-            // Draw navigation graph edges
-            for (const auto& edge : edges) {
-                if (edge.fromNode < static_cast<int>(nodes.size()) && 
-                    edge.toNode < static_cast<int>(nodes.size())) {
-                    glm::vec3 from = nodes[edge.fromNode].position;
-                    glm::vec3 to = nodes[edge.toNode].position;
-                    debugRenderer->addLine(from, to, glm::vec3(0.0f, 1.0f, 0.0f), 0.0f);
-                }
-            }
-            
-            // Draw enemy paths
-            for (const auto& enemy : enemies) {
-                if (!enemy.isAlive()) continue;
-                
-                // Draw line of sight check
-                glm::vec3 enemyEye = enemy.getPosition() + glm::vec3(0.0f, 1.6f, 0.0f);
-                glm::vec3 playerEye = player.getEyePosition();
-                bool hasLOS = enemy.canSeePlayer(player.getPosition());
-                glm::vec3 losColor = hasLOS ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.5f, 0.5f, 0.5f);
-                debugRenderer->addLine(enemyEye, playerEye, losColor, 0.0f);
-            }
-        }
-    }
-
-    if (postProcessing) {
-        // Calculate intensity based on current time scale
-        float btIntensity = (1.0f - m_timeScale) / (1.0f - Config::MIN_BULLET_TIME_SCALE);
-        postProcessing->setBulletTimeIntensity(btIntensity);
-        
-        postProcessing->end();
-        
-        // Enable gamma correction for the final resolve if enabled
-        if (Settings::getInstance().graphics.gammaCorrection) {
-            glEnable(GL_FRAMEBUFFER_SRGB);
-        }
-        
-        postProcessing->render(Settings::getInstance().window.width, Settings::getInstance().window.height, 
-                               Config::NEAR_PLANE, Config::FAR_PLANE, resourceManager.get());
-    }
-
-    // Disable Gamma Correction for UI to avoid double correction (Linear -> sRGB -> sRGB)
-    // UI is usually already sRGB
-    if (Settings::getInstance().graphics.gammaCorrection) {
-        glDisable(GL_FRAMEBUFFER_SRGB);
-    }
-
-    renderGUI();
-}
-
-void Game::renderScene(const glm::mat4& projection, const glm::mat4& view) {
-    Shader* lightingShader = resourceManager->getShader("lighting");
-    if (!lightingShader) return;
-
-    lightingShader->use();
-    lightingShader->setVec3("viewPos", camera.Position);
-    lightingShader->setMat4("projection", projection);
-    lightingShader->setMat4("view", view);
-    lightingShader->setBool("u_useHardwareGamma", Settings::getInstance().graphics.gammaCorrection);
-    
-    if (shadowSystem) {
-        lightingShader->setMat4("u_lightSpaceMatrix", shadowSystem->getLightSpaceMatrix());
-        glActiveTexture(GL_TEXTURE4); // Texture unit 4 for shadow map
-        glBindTexture(GL_TEXTURE_2D, shadowSystem->getDepthMap());
-        lightingShader->setInt("shadowMap", 4);
-    }
-    
-    // Tech-style effects
-    lightingShader->setFloat("u_time", m_accumulatedTime);
-    lightingShader->setFloat("u_techStyleIntensity", techStyleIntensity);
-
-    // Directional Light
-    lightingShader->setVec3("dirLight.direction", -0.3f, -1.0f, -0.2f);
-    lightingShader->setVec3("dirLight.ambient", 0.35f, 0.35f, 0.4f);
-    lightingShader->setVec3("dirLight.diffuse", 0.7f, 0.7f, 0.8f);
-    lightingShader->setVec3("dirLight.specular", 0.3f, 0.3f, 0.3f);
-
-    // Point Lights
-    glm::vec3 pointPositions[] = {
-        glm::vec3(-8.0f, 3.0f, -8.0f), glm::vec3(8.0f, 3.0f, -8.0f),
-        glm::vec3(-8.0f, 3.0f, 8.0f), glm::vec3(8.0f, 3.0f, 8.0f)
-    };
-    glm::vec3 pointColors[] = {
-        glm::vec3(1.0f, 0.8f, 0.6f), glm::vec3(0.8f, 0.9f, 1.0f),
-        glm::vec3(1.0f, 0.7f, 0.5f), glm::vec3(0.6f, 0.8f, 1.0f)
-    };
-
-    for (int i = 0; i < 4; ++i) {
-        std::string prefix = "pointLights[" + std::to_string(i) + "].";
-        lightingShader->setVec3(prefix + "position", pointPositions[i]);
-        lightingShader->setVec3(prefix + "ambient", pointColors[i] * 0.1f);
-        lightingShader->setVec3(prefix + "diffuse", pointColors[i]);
-        lightingShader->setVec3(prefix + "specular", pointColors[i]);
-        lightingShader->setFloat(prefix + "constant", 1.0f);
-        lightingShader->setFloat(prefix + "linear", 0.09f);
-        lightingShader->setFloat(prefix + "quadratic", 0.032f);
-    }
-
-    // Spot Light (Flashlight)
-    lightingShader->setVec3("spotLight.position", camera.Position);
-    lightingShader->setVec3("spotLight.direction", camera.Front);
-    lightingShader->setVec3("spotLight.ambient", 0.0f, 0.0f, 0.0f);
-    lightingShader->setVec3("spotLight.diffuse", 1.0f, 1.0f, 1.0f);
-    lightingShader->setVec3("spotLight.specular", 1.0f, 1.0f, 1.0f);
-    lightingShader->setFloat("spotLight.constant", 1.0f);
-    lightingShader->setFloat("spotLight.linear", 0.09f);
-    lightingShader->setFloat("spotLight.quadratic", 0.032f);
-    lightingShader->setFloat("spotLight.cutOff", glm::cos(glm::radians(12.5f)));
-    lightingShader->setFloat("spotLight.outerCutOff", glm::cos(glm::radians(17.5f)));
-
-    // Platforms / Level Geometry
-    lightingShader->setVec3("material.ambient", 0.3f, 0.3f, 0.4f);
-    lightingShader->setVec3("material.diffuse", 0.5f, 0.5f, 0.7f);
-    lightingShader->setVec3("material.specular", 0.3f, 0.3f, 0.3f);
-    lightingShader->setFloat("material.shininess", 32.0f);
-    
-    Mesh* cubeMesh = resourceManager->getMesh("cube");
-
-    // Unified platform rendering (supports both GLB meshes and procedural cubes)
-    for (const auto& platform : platforms) {
-        if (platform.hasMesh()) {
-            // Render the GLB mesh using its stored transform
-            lightingShader->setMat4("model", platform.getTransform());
-            for (const Mesh* mesh : platform.getMeshes()) {
-                mesh->draw();
-            }
-        } else if (cubeMesh) {
-            // Fallback to generic cubes for hardcoded levels or manual platforms
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), platform.getPosition());
-            model = glm::scale(model, platform.getSize());
-            lightingShader->setMat4("model", model);
-            cubeMesh->draw();
-        }
-    }
-
-    if (cubeMesh) {
-        for (const auto& enemy : enemies) {
-            if (!enemy.isAlive()) continue;
-
-            // Base material colors for enemy
-            glm::vec3 ambient(0.7f, 0.2f, 0.2f);
-            glm::vec3 diffuse(0.9f, 0.3f, 0.3f);
-            glm::vec3 spec(0.5f, 0.5f, 0.5f);
-            float shininess = 64.0f;
-
-            // Apply alert tint based on enemy alert progress (1.0 -> bright red)
-            float alert = enemy.getAlertProgress();
-            if (alert > 0.001f) {
-                glm::vec3 alertColor(1.0f, 0.2f, 0.2f);
-                ambient = glm::mix(ambient, alertColor, alert);
-                diffuse = glm::mix(diffuse, alertColor, alert);
-            }
-
-            lightingShader->setVec3("material.ambient", ambient);
-            lightingShader->setVec3("material.diffuse", diffuse);
-            lightingShader->setVec3("material.specular", spec);
-            lightingShader->setFloat("material.shininess", shininess);
-
-            // Entities are now correctly center-aligned in physics, so we translate directly to their position.
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), enemy.getPosition());
-            model = glm::scale(model, enemy.getSize());
-            lightingShader->setMat4("model", model);
-            cubeMesh->draw();
-        }
-    }
-
-    // Weapon Pickups
-    for (const auto& pickup : weaponPickups) {
-        if (pickup.isPickedUp()) continue;
-        
-        auto data = Config::Weapon::getWeaponConfig(pickup.getType());
-        const auto* meshes = resourceManager->getWeaponMeshes(data.name);
-
-        if (meshes && !meshes->empty()) {
-            lightingShader->setVec3("material.ambient", 0.5f, 0.5f, 0.5f);
-            lightingShader->setVec3("material.diffuse", 0.8f, 0.8f, 0.8f);
-            lightingShader->setVec3("material.specular", 1.0f, 1.0f, 1.0f);
-            lightingShader->setFloat("material.shininess", 128.0f);
-
-            glm::vec3 pickupPos = pickup.getPosition();
-            pickupPos.y += 0.2f + 0.1f * std::sin(m_accumulatedTime * 2.0f);
-            
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), pickupPos);
-            // Global rotation
-            model = glm::rotate(model, m_accumulatedTime, glm::vec3(0.0f, 1.0f, 0.0f));
-            
-            // Apply model-specific corrections from Config to ensure they are oriented correctly
-            model = glm::rotate(model, glm::radians(data.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(data.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(data.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-            // Use the base scale from Config (1.0 relative to the intended size)
-            // Scale down pickups slightly as they might look too large on the floor compared to FP view
-            float scale = data.scale * 0.6f; 
-            model = glm::scale(model, glm::vec3(scale));
-
-            lightingShader->setMat4("model", model);
-            for (const auto& mesh : *meshes) {
-                mesh->draw();
-            }
-        } else if (cubeMesh) {
-            // Fallback to cube if model not found
-            lightingShader->setVec3("material.ambient", 0.7f, 0.6f, 0.2f);
-            lightingShader->setVec3("material.diffuse", 0.9f, 0.8f, 0.3f);
-            lightingShader->setVec3("material.specular", 0.8f, 0.8f, 0.8f);
-            lightingShader->setFloat("material.shininess", 96.0f);
-
-            glm::vec3 pickupPos = pickup.getPosition();
-            pickupPos.y += 0.2f * std::sin(m_accumulatedTime * 2.0f);
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), pickupPos);
-            model = glm::rotate(model, m_accumulatedTime, glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(0.3f, 0.5f, 0.2f));
-            lightingShader->setMat4("model", model);
-            cubeMesh->draw();
-        }
-    }
-
-    // Player (Self) is not rendered in first-person view to avoid clipping with the camera.
-    /*
-    lightingShader->setVec3("material.ambient", 0.25f, 0.35f, 0.75f);
-    lightingShader->setVec3("material.diffuse", 0.4f, 0.6f, 1.0f);
-    lightingShader->setVec3("material.specular", 0.9f, 0.9f, 1.0f);
-    lightingShader->setFloat("material.shininess", 128.0f);
-
-    glm::mat4 playerModel = glm::translate(glm::mat4(1.0f), player.getPosition());
-    playerModel = glm::scale(playerModel, player.getSize());
-    lightingShader->setMat4("model", playerModel);
-    if (cubeMesh) cubeMesh->draw();
-    */
-}
-
-void Game::renderLights(const glm::mat4& projection, const glm::mat4& view) {
-    Shader* lightSourceShader = resourceManager->getShader("lightSource");
-    if (!lightSourceShader) return;
-
-    lightSourceShader->use();
-    lightSourceShader->setMat4("projection", projection);
-    lightSourceShader->setMat4("view", view);
-
-    glm::vec3 pointPositions[] = {
-        glm::vec3(-8.0f, 3.0f, -8.0f), glm::vec3(8.0f, 3.0f, -8.0f),
-        glm::vec3(-8.0f, 3.0f, 8.0f), glm::vec3(8.0f, 3.0f, 8.0f)
-    };
-    glm::vec3 pointColors[] = {
-        glm::vec3(1.0f, 0.8f, 0.6f), glm::vec3(0.8f, 0.9f, 1.0f),
-        glm::vec3(1.0f, 0.7f, 0.5f), glm::vec3(0.6f, 0.8f, 1.0f)
-    };
-
-    // Floating light spheres removed per user request.
-    // Lights are still applied in the lighting shader, we only remove the decorative geometry.
-    (void)pointPositions; (void)pointColors; // silence unused-variable warnings if any
-}
-
-void Game::renderProjectiles(const glm::mat4& projection, const glm::mat4& view) {
-    Shader* lightSourceShader = resourceManager->getShader("lightSource");
-    if (!lightSourceShader) return;
-
-    lightSourceShader->use();
-    lightSourceShader->setMat4("projection", projection);
-    lightSourceShader->setMat4("view", view);
-
-    Mesh* cubeMesh = resourceManager->getMesh("cube");
-    if (cubeMesh) {
-        for (const auto& proj : projectiles) {
-            if (proj.getTimeElapsed() < 0.05f) continue;
-
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), proj.getPosition());
-            glm::vec3 dir = glm::normalize(proj.getVelocity());
-            glm::vec3 up = std::abs(dir.y) < 0.99f ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
-            glm::mat4 rot = glm::lookAt(glm::vec3(0.0f), dir, up);
-            model = model * glm::inverse(rot);
-            model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.4f));
-
-            lightSourceShader->setMat4("model", model);
-            lightSourceShader->setVec3("lightColor", proj.isEnemyProjectile() ? glm::vec3(1.0f, 0.2f, 0.2f) : glm::vec3(1.0f, 1.0f, 0.4f));
-            cubeMesh->draw();
-        }
-    }
-}
-
-void Game::renderHUD() {
-    if (state == GameState::GAME_OVER && hud) {
-        hud->renderDeathScreen();
-        return;
-    }
-
-    if (player.isAlive() && hud) {
-        Weapon* currentWeapon = player.getInventory().getCurrentWeapon();
-        std::string name = currentWeapon ? currentWeapon->getName() : "None";
-        int ammo = currentWeapon ? currentWeapon->getCurrentAmmo() : 0;
-        int reserve = currentWeapon ? currentWeapon->getReserveAmmo() : 0;
-        bool reloading = currentWeapon ? currentWeapon->isReloading() : false;
-
-        int enemyCount = 0;
-        for (const auto& enemy : enemies) if (enemy.isAlive()) enemyCount++;
-
-        hud->render(player.getHealth(), player.getMaxHealth(),
-                    name, ammo, reserve, reloading,
-                    enemyCount, interactionPrompt, m_bulletTimeEnergy, Config::MAX_BULLET_TIME_ENERGY, m_bulletTimeActive);
-    }
-}
-
-void Game::renderGUI() {
-    if (menuSystem) {
-        menuSystem->render(state, currentLevel);
+    if (m_gameRenderer) {
+        m_gameRenderer->render(
+            m_accumulatedTime, 
+            state, 
+            currentLevel,
+            *m_console,
+            camera,
+            player,
+            weaponRenderer,
+            particleSystem,
+            postProcessing,
+            resourceManager,
+            hud,
+            debugRenderer,
+            skybox,
+            shadowSystem,
+            guiSystem,
+            menuSystem,
+            navigationGraph,
+            platforms,
+            enemies,
+            weaponPickups,
+            healthPickups,
+            projectiles,
+            techStyleIntensity,
+            m_timeScale,
+            m_playerMuzzleFlashTimer,
+            m_playerMuzzleFlashPos,
+            m_playerMuzzleFlashColor,
+            interactionPrompt,
+            m_bulletTimeEnergy,
+            m_bulletTimeActive
+        );
     }
 }
 
@@ -1366,35 +1130,4 @@ void Game::scrollCallback(GLFWwindow* /*window*/, double, double /*yoffset*/) {
 
 void Game::glfwErrorCallback(int errorCode, const char* description) {
     std::cerr << "GLFW Error [" << errorCode << "]: " << (description ? description : "<no description>") << std::endl;
-}
-
-void Game::renderDepthScene(Shader& depthShader) {
-    Mesh* cubeMesh = resourceManager->getMesh("cube");
-
-
-    // Platforms
-    for (const auto& platform : platforms) {
-        if (platform.hasMesh()) {
-            depthShader.setMat4("model", platform.getTransform());
-            for (const Mesh* mesh : platform.getMeshes()) {
-                mesh->draw();
-            }
-        } else if (cubeMesh) {
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), platform.getPosition());
-            model = glm::scale(model, platform.getSize());
-            depthShader.setMat4("model", model);
-            cubeMesh->draw();
-        }
-    }
-
-    // Enemies
-    if (cubeMesh) {
-        for (const auto& enemy : enemies) {
-            if (!enemy.isAlive()) continue;
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), enemy.getPosition());
-            model = glm::scale(model, enemy.getSize());
-            depthShader.setMat4("model", model);
-            cubeMesh->draw();
-        }
-    }
 }

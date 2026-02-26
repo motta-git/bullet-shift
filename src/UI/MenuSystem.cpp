@@ -16,7 +16,6 @@ MenuSystem::MenuSystem(GuiSystem& gui, AudioSystem& audio, Callbacks callbacks)
 MenuSystem::~MenuSystem() {}
 
 void MenuSystem::render(GameState state, int currentLevel) {
-    m_gui.beginFrame();
 
     switch (state) {
         case GameState::PLAYING:
@@ -72,9 +71,6 @@ void MenuSystem::render(GameState state, int currentLevel) {
     if (m_showSettings) {
         renderSettingsMenu(&m_showSettings);
     } 
-
-    m_gui.endFrame();
-    m_gui.render();
 }
 
 void MenuSystem::renderMainMenu() {
@@ -114,7 +110,7 @@ void MenuSystem::renderMainMenu() {
     
     // Bottom Right Title
     ImGui::PushFont(m_gui.getBigFont());
-    const char* title = "BULLET SHIFT";
+    const char* title = "Bullet Shift";
     ImVec2 titleSize = ImGui::CalcTextSize(title);
     float padding = 50.0f * scale;
     ImGui::SetCursorPosX(io.DisplaySize.x - titleSize.x - padding);
@@ -144,7 +140,7 @@ void MenuSystem::renderMainMenu() {
         currentY += buttonHeight + spacing;
     };
 
-    renderMenuButton("START GAME", [&]() {
+    renderMenuButton("Start Game", [&]() {
         if (settings.progress.lastLevelPlayed > 0) {
             m_showNewGameConfirmation = true;
         } else {
@@ -153,16 +149,16 @@ void MenuSystem::renderMainMenu() {
     });
 
     if (settings.progress.lastLevelPlayed > 0) {
-        renderMenuButton("CONTINUE", [&]() {
+        renderMenuButton("Continue", [&]() {
             if (m_callbacks.onLoadLevel) m_callbacks.onLoadLevel(settings.progress.lastLevelPlayed);
         });
     }
 
-    renderMenuButton("SETTINGS", [&]() {
+    renderMenuButton("Settings", [&]() {
         m_showSettings = true;
     });
 
-    renderMenuButton("EXIT", [&]() {
+    renderMenuButton("Exit", [&]() {
         if (m_callbacks.onQuitApp) m_callbacks.onQuitApp();
     });
 
@@ -186,7 +182,7 @@ void MenuSystem::renderPauseMenu() {
 
     // Bottom Right Title
     ImGui::PushFont(m_gui.getBigFont());
-    const char* title = "PAUSED";
+    const char* title = "Paused";
     ImVec2 titleSize = ImGui::CalcTextSize(title);
     float padding = 50.0f * scale;
     ImGui::SetCursorPosX(io.DisplaySize.x - titleSize.x - padding);
@@ -215,15 +211,15 @@ void MenuSystem::renderPauseMenu() {
         currentY += buttonHeight + spacing;
     };
 
-    renderMenuButton("RESUME", [&]() {
+    renderMenuButton("Resume", [&]() {
         if (m_callbacks.onResume) m_callbacks.onResume();
     });
 
-    renderMenuButton("SETTINGS", [&]() {
+    renderMenuButton("Settings", [&]() {
         m_showSettings = true;
     });
 
-    renderMenuButton("EXIT TO MENU", [&]() {
+    renderMenuButton("Exit to Menu", [&]() {
         if (m_callbacks.onExitToMenu) m_callbacks.onExitToMenu();
     });
 
@@ -251,12 +247,12 @@ void MenuSystem::renderQuitConfirmation(int /*currentLevel*/) {
     if (ImGui::BeginPopupModal("Quit Confirmation", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar)) {
         ImGui::Text("\n  Are you sure you want to exit?  \n\n");
         
-        if (ImGui::Button("YES", ImVec2(120 * scale, 40 * scale))) {
+        if (ImGui::Button("Yes", ImVec2(120 * scale, 40 * scale))) {
             m_audio.playSound("ui_click");
             if (m_callbacks.onQuitApp) m_callbacks.onQuitApp();
         }
         ImGui::SameLine();
-        if (ImGui::Button("NO", ImVec2(120 * scale, 40 * scale))) {
+        if (ImGui::Button("No", ImVec2(120 * scale, 40 * scale))) {
             m_audio.playSound("ui_cancel");
             if (m_callbacks.onResume) m_callbacks.onResume(); // Resume or go back using the same callback
             ImGui::CloseCurrentPopup();
@@ -279,7 +275,7 @@ void MenuSystem::renderLevelWin(int currentLevel) {
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(0, 0), bottomRight, ImColor(10, 30, 10, 150));
 
     ImGui::PushFont(m_gui.getBigFont());
-    const char* msg = "LEVEL COMPLETE!";
+    const char* msg = "Level Complete!";
     float textWidth = ImGui::CalcTextSize(msg).x;
     ImGui::SetCursorPosX((io.DisplaySize.x - textWidth) * 0.5f);
     ImGui::SetCursorPosY(io.DisplaySize.y * 0.3f);
@@ -289,13 +285,13 @@ void MenuSystem::renderLevelWin(int currentLevel) {
     float buttonWidth = 250.0f * scale;
     ImGui::SetCursorPosX((io.DisplaySize.x - buttonWidth) * 0.5f);
     ImGui::SetCursorPosY(io.DisplaySize.y * 0.5f);
-    if (ImGui::Button("NEXT LEVEL", ImVec2(buttonWidth, 60 * scale))) {
+    if (ImGui::Button("Next Level", ImVec2(buttonWidth, 60 * scale))) {
         m_audio.playSound("ui_click");
         if (m_callbacks.onLoadLevel) m_callbacks.onLoadLevel(currentLevel + 1);
     }
     
     ImGui::SetCursorPosX((io.DisplaySize.x - buttonWidth) * 0.5f);
-    if (ImGui::Button("MAIN MENU", ImVec2(buttonWidth, 60 * scale))) {
+    if (ImGui::Button("Main Menu", ImVec2(buttonWidth, 60 * scale))) {
         m_audio.playSound("ui_click");
         if (m_callbacks.onExitToMenu) m_callbacks.onExitToMenu();
     }
@@ -574,7 +570,7 @@ void MenuSystem::renderNewGameConfirmation() {
         ImGui::Text("\n  Starting a new game will erase  \n");
         ImGui::Text("  your current saved progress!  \n\n");
         
-        if (ImGui::Button("START NEW GAME", ImVec2(180 * scale, 40 * scale))) {
+        if (ImGui::Button("Start New Game", ImVec2(180 * scale, 40 * scale))) {
             m_audio.playSound("ui_click");
             // Reset progress and start from level 1
             Settings& settings = Settings::getInstance();
@@ -585,7 +581,7 @@ void MenuSystem::renderNewGameConfirmation() {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("CANCEL", ImVec2(120 * scale, 40 * scale))) {
+        if (ImGui::Button("Cancel", ImVec2(120 * scale, 40 * scale))) {
             m_audio.playSound("ui_cancel");
             m_showNewGameConfirmation = false;
             ImGui::CloseCurrentPopup();
@@ -607,7 +603,7 @@ void MenuSystem::applySettings() {
 
 const char* MenuSystem::getKeyName(int keyCode) {
     switch (keyCode) {
-        case GLFW_KEY_SPACE: return "Space";
+        case GLFW_KEY_SPACE: return "SPACE";
         case GLFW_KEY_APOSTROPHE: return "'";
         case GLFW_KEY_COMMA: return ",";
         case GLFW_KEY_MINUS: return "-";
@@ -654,26 +650,28 @@ const char* MenuSystem::getKeyName(int keyCode) {
         case GLFW_KEY_LEFT_BRACKET: return "[";
         case GLFW_KEY_BACKSLASH: return "\\";
         case GLFW_KEY_RIGHT_BRACKET: return "]";
-        case GLFW_KEY_GRAVE_ACCENT: return "`";
-        case GLFW_KEY_ESCAPE: return "Escape";
-        case GLFW_KEY_ENTER: return "Enter";
-        case GLFW_KEY_TAB: return "Tab";
-        case GLFW_KEY_BACKSPACE: return "Backspace";
-        case GLFW_KEY_INSERT: return "Insert";
-        case GLFW_KEY_DELETE: return "Delete";
-        case GLFW_KEY_RIGHT: return "Right";
-        case GLFW_KEY_LEFT: return "Left";
-        case GLFW_KEY_DOWN: return "Down";
-        case GLFW_KEY_UP: return "Up";
-        case GLFW_KEY_PAGE_UP: return "Page Up";
-        case GLFW_KEY_PAGE_DOWN: return "Page Down";
-        case GLFW_KEY_HOME: return "Home";
-        case GLFW_KEY_END: return "End";
-        case GLFW_KEY_CAPS_LOCK: return "Caps Lock";
-        case GLFW_KEY_SCROLL_LOCK: return "Scroll Lock";
-        case GLFW_KEY_NUM_LOCK: return "Num Lock";
-        case GLFW_KEY_PRINT_SCREEN: return "Print Screen";
-        case GLFW_KEY_PAUSE: return "Pause";
+        case GLFW_KEY_GRAVE_ACCENT: return "~";
+        case GLFW_KEY_WORLD_1: return "WORLD 1";
+        case GLFW_KEY_WORLD_2: return "WORLD 2";
+        case GLFW_KEY_ESCAPE: return "ESC";
+        case GLFW_KEY_ENTER: return "ENTER";
+        case GLFW_KEY_TAB: return "TAB";
+        case GLFW_KEY_BACKSPACE: return "BACKSPACE";
+        case GLFW_KEY_INSERT: return "INSERT";
+        case GLFW_KEY_DELETE: return "DELETE";
+        case GLFW_KEY_RIGHT: return "RIGHT";
+        case GLFW_KEY_LEFT: return "LEFT";
+        case GLFW_KEY_DOWN: return "DOWN";
+        case GLFW_KEY_UP: return "UP";
+        case GLFW_KEY_PAGE_UP: return "PAGE UP";
+        case GLFW_KEY_PAGE_DOWN: return "PAGE DOWN";
+        case GLFW_KEY_HOME: return "HOME";
+        case GLFW_KEY_END: return "END";
+        case GLFW_KEY_CAPS_LOCK: return "CAPS LOCK";
+        case GLFW_KEY_SCROLL_LOCK: return "SCROLL LOCK";
+        case GLFW_KEY_NUM_LOCK: return "NUM LOCK";
+        case GLFW_KEY_PRINT_SCREEN: return "PRINTSCREEN";
+        case GLFW_KEY_PAUSE: return "PAUSE";
         case GLFW_KEY_F1: return "F1";
         case GLFW_KEY_F2: return "F2";
         case GLFW_KEY_F3: return "F3";
@@ -686,16 +684,16 @@ const char* MenuSystem::getKeyName(int keyCode) {
         case GLFW_KEY_F10: return "F10";
         case GLFW_KEY_F11: return "F11";
         case GLFW_KEY_F12: return "F12";
-        case GLFW_KEY_LEFT_SHIFT: return "Left Shift";
-        case GLFW_KEY_LEFT_CONTROL: return "Left Ctrl";
-        case GLFW_KEY_LEFT_ALT: return "Left Alt";
-        case GLFW_KEY_LEFT_SUPER: return "Left Super";
-        case GLFW_KEY_RIGHT_SHIFT: return "Right Shift";
-        case GLFW_KEY_RIGHT_CONTROL: return "Right Ctrl";
-        case GLFW_KEY_RIGHT_ALT: return "Right Alt";
-        case GLFW_KEY_RIGHT_SUPER: return "Right Super";
-        case GLFW_KEY_MENU: return "Menu";
-        default: return "Unknown";
+        case GLFW_KEY_LEFT_SHIFT: return "LSHIFT";
+        case GLFW_KEY_LEFT_CONTROL: return "LCTRL";
+        case GLFW_KEY_LEFT_ALT: return "LALT";
+        case GLFW_KEY_LEFT_SUPER: return "LSUPER";
+        case GLFW_KEY_RIGHT_SHIFT: return "RSHIFT";
+        case GLFW_KEY_RIGHT_CONTROL: return "RCTRL";
+        case GLFW_KEY_RIGHT_ALT: return "RALT";
+        case GLFW_KEY_RIGHT_SUPER: return "RSUPER";
+        case GLFW_KEY_MENU: return "MENU";
+        default: return "UNKNOWN";
     }
 }
 
@@ -731,42 +729,26 @@ void MenuSystem::renderKeyBindingsSection() {
     renderKeyRow("Switch Weapon", &settings.keybinds.switchWeapon);
     renderKeyRow("Interact", &settings.keybinds.interact);
     renderKeyRow("Bullet Time", &settings.keybinds.bulletTime);
+    renderKeyRow("Console", &settings.keybinds.consoleToggle);
     
     // Key capture modal
     ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     
     if (ImGui::BeginPopupModal("Press a Key", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+        // Skip first frame to avoid capturing the input that opened the modal
+        if (ImGui::IsWindowAppearing()) {
+            ImGui::EndPopup();
+            return;
+        }
+
         ImGui::Text("Press a key to bind to: %s", m_captureActionName.c_str());
         ImGui::Text("\nPress ESC to cancel\n\n");
-        
-        // Check for key presses
-        for (int key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; ++key) {
-            if (ImGui::IsKeyPressed((ImGuiKey)key, false)) {
-                // Map ImGui key back to GLFW key
-                // ImGui uses its own key enum, we need to detect raw keypresses
-                // Actually, we should check GLFW directly for this
-            }
-        }
         
         // Use GLFW to detect key presses since we need GLFW key codes
         // We'll iterate through common keys and check if any are pressed
         bool keyFound = false;
         int pressedKey = -1;
-        
-        // Check all possible GLFW keys
-        for (int key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; ++key) {
-            if (key == GLFW_KEY_ESCAPE) continue; // ESC is for cancel
-            
-            // We need to check via ImGui since we don't have direct GLFW window access here
-            // Use ImGui's key detection which maps to GLFW internally
-            ImGuiKey imguiKey = (ImGuiKey)(key);
-            if (ImGui::IsKeyPressed(imguiKey, false)) {
-                pressedKey = key;
-                keyFound = true;
-                break;
-            }
-        }
         
         // Manual check for common keys using ImGui named keys
         if (!keyFound) {

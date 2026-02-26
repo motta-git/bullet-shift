@@ -108,12 +108,6 @@ void PhysicsSystem::handleCollisions() {
                     if (m_game.particleSystem) m_game.particleSystem->emitExplosion(pPos, 2);
                     
                     if (!enemy.isAlive()) {
-                        // Drop weapon if not already dropped
-                        if (!enemy.isWeaponDropped() && enemy.getWeapon()) {
-                            m_game.weaponPickups.emplace_back(enemy.getPosition(), enemy.getWeapon()->getType());
-                            enemy.setWeaponDropped(true);
-                        }
-
                         bool anyOtherAlive = false;
                         for (const auto& e : m_game.enemies) {
                             if (&e != &enemy && e.isAlive()) {
