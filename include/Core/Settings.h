@@ -16,6 +16,7 @@ struct KeyBindings {
     int switchWeapon = GLFW_KEY_Q;
     int interact = GLFW_KEY_E;
     int bulletTime = GLFW_KEY_F;
+    int consoleToggle = GLFW_KEY_GRAVE_ACCENT;
 };
 
 struct WindowSettings {

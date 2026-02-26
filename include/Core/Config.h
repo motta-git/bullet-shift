@@ -67,7 +67,7 @@ namespace Config {
     
     // UI Settings
     constexpr float UI_REFERENCE_HEIGHT = 720.0f; // Lower value = Bigger UI
-    constexpr const char* FONT_PATH = "assets/ui/Airlock.otf";
+    constexpr const char* FONT_PATH = "assets/ui/NimbusSans.otf";
 
     // HUD / Notification tuning
     namespace UI {

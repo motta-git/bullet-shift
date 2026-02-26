@@ -16,6 +16,7 @@ Enemy::Enemy(glm::vec3 position, WeaponType weaponType)
       maxHealth(100.0f),
       detectionRange(30.0f),
       m_weaponDropped(false),
+      m_wasAlive(true),
       velocity(0.0f),
       acceleration(0.0f),
       onGround(false),
@@ -112,6 +113,8 @@ void Enemy::update(float deltaTime, glm::vec3 playerPosition,
     
     // Apply physics (gravity, collision)
     applyPhysics(deltaTime, platforms);
+
+    m_wasAlive = isAlive();
 } 
 
 bool Enemy::shouldShoot(float currentTime) const {

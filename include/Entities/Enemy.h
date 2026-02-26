@@ -51,6 +51,7 @@ public:
     // Weapon dropping
     bool isWeaponDropped() const { return m_weaponDropped; }
     void setWeaponDropped(bool dropped) { m_weaponDropped = dropped; }
+    bool justDied() const { return !isAlive() && m_wasAlive; }
     
     // Check if can see player
     bool canSeePlayer(glm::vec3 playerPosition) const;
@@ -66,6 +67,7 @@ private:
     float detectionRange;
     std::unique_ptr<Weapon> weapon;
     bool m_weaponDropped;
+    bool m_wasAlive;
     
     // Movement physics
     glm::vec3 velocity;

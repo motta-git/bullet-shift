@@ -31,6 +31,8 @@ class MenuSystem;
 class LevelManager;
 class ResourceManager;
 class PhysicsSystem;
+class GameRenderer;
+class DevConsole;
 
 enum class GameState {
     MAIN_MENU,
@@ -45,6 +47,9 @@ enum class GameState {
 class Game {
     friend class LevelManager;
     friend class PhysicsSystem;
+    friend class GameRenderer;
+    friend class DevConsole;
+
 public:
     Game();
     ~Game();
@@ -70,14 +75,6 @@ private:
     void applySettings();
     void syncMusicWithState(bool forceRestart = false);
 
-    // Helper rendering methods to keep render() clean
-    void renderScene(const glm::mat4& projection, const glm::mat4& view);
-    void renderDepthScene(Shader& depthShader);
-    void renderLights(const glm::mat4& projection, const glm::mat4& view);
-    void renderHUD();
-    void renderGUI();
-    void renderProjectiles(const glm::mat4& projection, const glm::mat4& view);
-
     void handleCollisions();
 
     // Callback functions
@@ -89,7 +86,6 @@ private:
     static Game* instance;
 
     GLFWwindow* window;
-
 
     Camera camera;
     Player player;
@@ -107,6 +103,7 @@ private:
     std::unique_ptr<NavigationGraph> navigationGraph;
     std::unique_ptr<Skybox> skybox;
     std::unique_ptr<ShadowSystem> shadowSystem;
+    std::unique_ptr<GameRenderer> m_gameRenderer;
     WeaponRenderer weaponRenderer;
 
     std::vector<Platform> platforms;
@@ -120,14 +117,12 @@ private:
     int pickupKey;
     std::string interactionPrompt;
 
-    // Wall-clock timestamp used to compute raw frame delta: currentGLFWTime - lastGlfwTime.
-    // This is intentionally separate from `m_accumulatedTime` which tracks game world time (scaled by m_timeScale).
     float lastGlfwTime;
     float explosionTimer;
     float fireTimer;
     float deathTimer;
     
-    float techStyleIntensity; // 0.0 to 1.0 for tech-style graphics effect
+    float techStyleIntensity; 
 
     // Bullet Time
     float m_timeScale;
@@ -144,5 +139,5 @@ private:
     int currentLevel;
     std::string activeMusicTrackId;
 
-    bool m_showDebugLevelSelector;
+    std::unique_ptr<DevConsole> m_console;
 };

@@ -12,6 +12,7 @@
     - [ ] Health packs, Ammo crates, and Power-ups.
     - [ ] Breaking crates or explosive barrels.
     - [ ] Snipers, Melee Rushers
+    - [x] Enemies drop their weapons upon getting game ended
 
 - [] Levels.
     - [x] Level 1

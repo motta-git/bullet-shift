@@ -90,8 +90,8 @@ bool Settings::load(const std::string& filepath) {
                 else if (key == "keybinds.dash") keybinds.dash = std::stoi(value);
                 else if (key == "keybinds.reload") keybinds.reload = std::stoi(value);
                 else if (key == "keybinds.switch") keybinds.switchWeapon = std::stoi(value);
-                else if (key == "keybinds.interact") keybinds.interact = std::stoi(value);
                 else if (key == "keybinds.bullettime") keybinds.bulletTime = std::stoi(value);
+                else if (key == "keybinds.console") keybinds.consoleToggle = std::stoi(value);
             }
         }
     }
@@ -140,6 +140,6 @@ void Settings::save(const std::string& filepath) const {
     file << "keybinds.dash=" << keybinds.dash << "\n";
     file << "keybinds.reload=" << keybinds.reload << "\n";
     file << "keybinds.switch=" << keybinds.switchWeapon << "\n";
-    file << "keybinds.interact=" << keybinds.interact << "\n";
     file << "keybinds.bullettime=" << keybinds.bulletTime << "\n";
+    file << "keybinds.console=" << keybinds.consoleToggle << "\n";
 }

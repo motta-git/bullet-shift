@@ -174,7 +174,7 @@ void HUD::render(int health, int maxHealth, const std::string& weaponName,
 
     if (bulletTimeActive) {
         ImGui::PushFont(regularFont);
-        drawList->AddText(ImVec2(healthX, btY - 25.0f * scale), ImColor(255, 255, 255, 200), "BULLET TIME");
+        drawList->AddText(ImVec2(healthX, btY - 25.0f * scale), ImColor(255, 255, 255, 200), "Bullet Time");
         ImGui::PopFont();
     }
     */
@@ -227,7 +227,7 @@ void HUD::render(int health, int maxHealth, const std::string& weaponName,
     ImGui::PopFont();
 
     // 3. Enemy Count (Top Right)
-    std::string enemyStr = "ENEMIES: " + std::to_string(enemyCount);
+    std::string enemyStr = "Enemies: " + std::to_string(enemyCount);
     ImGui::PushFont(regularFont);
     ImVec2 enemySize = ImGui::CalcTextSize(enemyStr.c_str());
     drawList->AddText(ImVec2(screenPos.x + screenWidth - margin - enemySize.x + 1 * scale, screenPos.y + margin + 1 * scale), ImColor(0, 0, 0, 200), enemyStr.c_str());
@@ -370,7 +370,7 @@ void HUD::renderDeathScreen() {
     // Full screen red overlay with fade
     drawList->AddRectFilled(ImVec2(0, 0), ImVec2(screenWidth, screenHeight), ImColor(50, 0, 0, 200));
 
-    std::string text = "GAME OVER";
+    std::string text = "Game Over";
     bigFont->Scale = scale * 2.5f; // Make it massive
     ImGui::PushFont(bigFont);
     ImVec2 textSize = ImGui::CalcTextSize(text.c_str());

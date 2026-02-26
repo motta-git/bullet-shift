@@ -45,6 +45,10 @@ public:
     bool isDashing() const { return m_isDashing; }
     float getDashCooldown() const { return m_dashCooldown; }
     void stopDash() { m_isDashing = false; }
+
+    // God Mode (dev console)
+    void setGodMode(bool enabled) { m_godMode = enabled; }
+    bool isGodMode() const { return m_godMode; }
     
 private:
     glm::vec3 position;
@@ -72,5 +76,6 @@ private:
     float m_dashCooldown = 0.0f;
     glm::vec3 m_dashDirection = glm::vec3(0.0f);
 
+    bool m_godMode = false;
 
 };

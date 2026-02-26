@@ -1,0 +1,8 @@
+Update 1.1:
+
+- Added Health packs
+- Added muzzle flash upon weapon fire
+- Added a Console that you can use to run commands you can bind a key to open it.
+- Enemies now drop their weapons upon death
+- Added a level 4, i still need to finish it.
+- Changed font to NimbusSans
